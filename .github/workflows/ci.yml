@@ -1,0 +1,38 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    name: Windows tests and mod builds
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install pinned local tools
+        run: python forge.py setup
+      - name: Run tests, including real MCP transport
+        run: .venv/Scripts/python.exe -m unittest discover -s tests -v
+      - name: Build and package both templates
+        run: .venv/Scripts/python.exe scripts/ci_smoke.py
+      - name: Check Windows launcher
+        run: |
+          .\forge.cmd --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\forge.cmd guide overview
+          exit $LASTEXITCODE

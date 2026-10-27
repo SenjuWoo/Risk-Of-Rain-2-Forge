@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+tools/
+projects/
+artifacts/
+forge.local.json
+*.log
+.env
+.env.*
+!.env.example
+.codex/
+.claude/
+.mcp.json
+.idea/
+.vscode/

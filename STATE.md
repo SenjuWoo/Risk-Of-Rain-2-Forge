@@ -1,0 +1,17 @@
+# Risk of Rain 2 Forge — verified handoff
+
+- Version: **1.0.0 WIP**, public MIT source requested 2026-10-27. Owner/source is this root (WORKSPACE_OWNERSHIP.md). Repository: SenjuWoo/Risk-Of-Rain-2-Forge. No stable binary release.
+- Goal: give any agent current tools, exact API inspection, tested templates and an efficient modding playbook.
+- User preference: CLI by default. MCP is optional, unregistered globally and never auto-started. No personal agent config/model choices changed.
+- Entry: `forge.cmd doctor`, `forge.cmd guide`, `AGENTS.md`. Source modules in ror2forge/, templates in templates/, reusable skill in skills/ror2-forge/.
+- Local tools: ILSpy 11.2.0.10050, TCLI 0.2.4, official MCP SDK 2.3.0. Shared Python 3.14.10/.NET SDK 10.0.403 reused. Receipts/hashes and offline tool caches in tools/.
+- Done: read-only Steam/profile discovery; guarded scaffolding; pinned/locked/offline compilation; selective type/member decompilation; log triage; live Thunderstore lookup; deterministic allowlisted DLL/assets packaging and ZIP validation; optional eight-tool MCP; agent code/content/asset/network/debugging recipes.
+- Verified: 33 tests pass; real MCP initialize/list/resource/call/error flow; fresh offline tool provisioning; actual plugin/stats builds online and locked offline; deterministic packages; exact installed type/member inspection; live package lookup; C# keyword build; failed build returns JSON and persists diagnostics.
+- Evidence: VALIDATION.md and artifacts/{tests.stderr.txt,doctor-proof.json,plugin-build-proof.json,stats-build-proof.json,plugin-package-proof.json,stats-package-proof.json,inspect-member.json,lookup-proof.json,keyword-build.json,failed-build-proof.json,toolchain-offline-proof.json}.
+- Known-good examples: projects/ForgeSmoke and projects/ForgeStatsSmoke; ZIPs in artifacts/Local-ForgeSmoke-1.0.0.zip and artifacts/Local-ForgeStatsSmoke-1.0.0.zip. Temporary keyword/offline-test installations removed after saving proof.
+- Baseline: Steam build 25921972, Unity 2021.3.45f2, RoR2.dll SHA256 48f2758cccbe1a5efba88cffe0a68631953f489a71a92726572c15a4c57ff90c. Game/profile/save/reference folders were read only.
+- Warning: stats template's MMHOOK.RoR2 2026.10.8 declares .NET Framework assets; NuGet NU1701 remains visible in its log/receipt. Compilation succeeds; no runtime compatibility claim.
+- Remaining validation: no game/plugin load, gameplay/multiplayer/save session, or Unity editor asset import/bundle test. Optional Unity editor is not bundled. TCLI public binary redistribution permission is unverified (THIRD_PARTY.md); local use is the delivered scope.
+- Recovery: retain known-good ZIPs/receipts and locks. Run `forge.cmd setup --offline` to restore local tools and `forge.cmd build NAME --locked --offline` for cached references. Bump all version fields before different release bytes. One writer per mod.
+- Next: publish the prepared WIP repository, verify exact-commit CI and GitHub security settings/alerts.
+

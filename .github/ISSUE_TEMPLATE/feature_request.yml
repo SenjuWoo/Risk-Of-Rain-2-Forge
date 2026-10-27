@@ -1,0 +1,10 @@
+name: Workflow request
+description: Suggest a concrete RoR2 modding workflow
+body:
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Modding task and current limitation
+      description: Explain the result you want and what you tried. Include primary tool/API sources where relevant.
+    validations:
+      required: true
