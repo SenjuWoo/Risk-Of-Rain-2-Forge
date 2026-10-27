@@ -13,5 +13,5 @@
 - Warning: stats template's MMHOOK.RoR2 2026.10.8 declares .NET Framework assets; NuGet NU1701 remains visible in its log/receipt. Compilation succeeds; no runtime compatibility claim.
 - Remaining validation: no game/plugin load, gameplay/multiplayer/save session, or Unity editor asset import/bundle test. Optional Unity editor is not bundled. TCLI public binary redistribution permission is unverified (THIRD_PARTY.md); local use is the delivered scope.
 - Recovery: retain known-good ZIPs/receipts and locks. Run `forge.cmd setup --offline` to restore local tools and `forge.cmd build NAME --locked --offline` for cached references. Bump all version fields before different release bytes. One writer per mod.
-- Next: publish the prepared WIP repository, verify exact-commit CI and GitHub security settings/alerts.
-
+- Publication: https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge is public, MIT and explicitly WIP. First pushed source commit 86d28d16ee14d1d41b462080eedc9b605e605234 passed clean Windows CI and CodeQL. Dependabot, code-scanning and secret-scanning alerts queried: 0/0/0. Secret scanning/push protection/private vulnerability reporting/dependency security updates verified enabled. Code quality is unavailable (404), left off.
+- Next: use the forge or contribute against the roadmap; no stable binary release, in-game test or Unity editor certification is claimed. Current branch checks are visible in GitHub Actions.

@@ -43,7 +43,7 @@ Each contains root README.md, icon.png, manifest.json and plugins/NAME/NAME.dll.
 - Publicized/stripped compile references do not grant private-member runtime access. Runtime APIs/hooks/network behavior still require per-mod testing.
 - Source receipts cover project inputs and conventional ancestor build settings. Arbitrary external MSBuild imports, hostile build scripts, concurrent input races, future game patches and other platforms were not certified. Keep owned source trusted and one writer per project.
 - No editor/EditorKit/ThunderKit MCP was registered without an editor project. Asset authoring route is documented; actual matching editor/import workflow remains task-specific.
-- TCLI is locally installed/version-tested; the guarded deterministic packager is the default. TCLI upload was never used. Its public redistribution permission is unverified; no public forge archive/repository was created.
+- TCLI is locally installed/version-tested; the guarded deterministic packager is the default. TCLI upload was never used. Its public redistribution permission is unverified; no public binary forge archive was created; the subsequent WIP publication contains source only.
 - Receipts record HTTPS sources and observed hashes, not independent vendor signatures. Personal feeds/credentials/settings were not copied.
 
 ## Primary sources
@@ -56,3 +56,7 @@ Each contains root README.md, icon.png, manifest.json and plugins/NAME/NAME.dll.
 
 Public MIT source publication authorized 2026-10-27. CI installs official pinned tools on a clean Windows runner, runs all tests and compiles/packages both templates without a game installation. Remote exact-SHA result is recorded in the publication handoff after verification. Local evidence artifacts listed above are deliberately untracked and are not shipped by cloning.
 
+
+## First public source verification
+
+Commit `86d28d16ee14d1d41b462080eedc9b605e605234`: [clean Windows CI](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/runs/40588483635) and [CodeQL](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/runs/40588505433) completed successfully. All 33 tests, online/locked-offline builds for both templates, deterministic packages and the Windows launcher passed on the clean runner. CodeQL analysis records match that SHA with no analysis errors. Dependabot, code-scanning and secret-scanning queries each returned zero open alerts. Public/MIT/main, dependency alerts/security updates, private vulnerability reporting and secret scanning/push protection were read back from GitHub. Code quality setup/findings returned 404 and were left off. No release/tag or third-party binary upload was made. Subsequent commits are checked by the same CI; consult Actions for the current HEAD.
