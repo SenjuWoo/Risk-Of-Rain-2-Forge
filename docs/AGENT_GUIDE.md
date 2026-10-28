@@ -6,12 +6,12 @@ Read root `AGENTS.md`, `STATE.md`, and `WORKSPACE_OWNERSHIP.md` before writing. 
 
 1. Run `forge.cmd doctor`. Resolve missing required capabilities before proceeding. Read the game build, Unity runtime and installed packages; never infer compatibility from a package name.
 2. Choose `forge.cmd new MyMod --author MyTeam --template plugin` for plain code/config or `--template stats` for the tested R2API stat-event example. Open the generated source, manifest and lock files.
-3. Verify a type or hook before coding: `forge.cmd inspect RoR2.CharacterBody`. Use `--assembly <path-to-dll>` for an R2API/Unity/mod assembly, or `--member <XML-doc-ID>` to return only one member. Request the smallest scope rather than decompiling an entire game into context. Inspection output remains private.
+3. Find types with `forge.cmd symbols CharacterBody --limit 10`, then verify the API/hook with `forge.cmd inspect RoR2.CharacterBody`. Both accept `--assembly <path-to-dll>` for an R2API/Unity/mod assembly. Inspection accepts `--member <XML-doc-ID>` to return one member. Respect the symbol result's truncation flag; refine the query instead of requesting a whole-game source dump. Inspection output remains private.
 4. Use the smallest R2API module needed; align its NuGet reference, `[BepInDependency]`, and Thunderstore manifest dependency. Add an exact version, restore once, then retain `packages.lock.json` and use `forge.cmd build MyMod --locked`.
-5. Build, inspect errors, fix the cause, then `forge.cmd package MyMod` and `forge.cmd validate <zip>`. Preserve the last known-good package. Review every runtime payload file.
+5. Build, inspect errors, fix the cause, then `forge.cmd package MyMod` and `forge.cmd validate <zip>`. For an update, `forge.cmd bump MyMod patch` (or minor/major/increasing X.Y.Z) backs up and aligns the four version fields, preserves prior packages and invalidates the old build. Inspect its backup receipt, rebuild and review every runtime payload file. The tool refuses inconsistent/custom declarations instead of silently changing them.
 6. For runtime testing, prepare a separate disposable r2modman profile and have the human select/import the package. The forge does not write to profiles, install mods, launch games, upload packages, or change personal agent settings. Record loader version, game build, package versions, log evidence and host/client test result.
 
-The CLI returns JSON and is the default for every host. No MCP is started or globally registered. The optional MCP adapter exposes the same operations as eight typed tools plus two guide resources only when explicitly launched for an RoR2 task. Setup uses the official SDK; never recreate MCP framing or replace ILSpy with guessed signature parsing.
+The CLI returns JSON and is the default for every host. No MCP is started or globally registered. The optional adapter retains its original eight tools and two guide resources only when explicitly launched for an RoR2 task; use CLI for `symbols`/`bump`. Setup uses the official SDK; never recreate MCP framing or replace ILSpy with guessed signature parsing.
 
 ## Evidence and versions
 

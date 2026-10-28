@@ -118,6 +118,20 @@ class CoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must agree"):
             core.package_mod("Example")
 
+    def test_package_accepts_literal_version_with_custom_spacing(self):
+        folder = self.built_fixture()
+        source = folder / "src/Plugin.cs"
+        source.write_text(source.read_text().replace("PluginVersion = ", "PluginVersion="))
+        core.write_json(folder / "build/receipt.json", {"assembly_sha256": core.sha256(folder / "build/bin/Example.dll"), "source_sha256": core.source_digest(folder)})
+        self.assertTrue(core.package_mod("Example")["valid"])
+
+    def test_comment_cannot_hide_wrong_plugin_version(self):
+        folder = self.built_fixture()
+        source = folder / "src/Plugin.cs"
+        source.write_text(source.read_text().replace('PluginVersion = "1.0.0"', 'PluginVersion = "2.0.0"') + '\n// PluginVersion = "1.0.0"\n')
+        with self.assertRaisesRegex(ValueError, "PluginVersion must agree"):
+            core.package_mod("Example")
+
     def test_changed_release_cannot_replace_same_version(self):
         folder = self.built_fixture()
         core.package_mod("Example")

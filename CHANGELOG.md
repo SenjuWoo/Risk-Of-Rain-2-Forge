@@ -1,3 +1,9 @@
+# 1.1.0 — WIP / unreleased
+
+- `symbols`: bounded, case-insensitive exact type discovery through pinned ILSpy, including nested types, interfaces, structs, enums and delegates; no background index.
+- `bump`: validate and back up generated mod version fields, update them together and roll back failed writes. Preserve old release packages and require a fresh build.
+- Extend clean Windows CI to search compiled fixtures, inspect nested types, bump/rebuild both templates and preserve old/new packages. Keep the optional MCP schema unchanged.
+
 # 1.0.0 — WIP / unreleased
 
 - Public MIT source repository, clean Windows CI, Dependabot, contribution/security policies and issue templates.
