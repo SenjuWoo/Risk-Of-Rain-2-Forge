@@ -6,6 +6,7 @@
 - Local pinned tool provisioning, offline caches, two C# templates and NuGet locks.
 - Exact assembly inspection, read-only discovery/log triage and deterministic guarded packaging.
 - Tests plus clean-runner template compilation/package CI.
+- Bounded symbol search through ILSpy and backed-up version bumps for the edit/build/package loop (1.1.0 WIP).
 
 ## Before a stable release
 

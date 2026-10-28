@@ -27,6 +27,13 @@ def parser() -> argparse.ArgumentParser:
     build.add_argument("name")
     build.add_argument("--locked", action="store_true", help="Require an unchanged existing packages.lock.json")
     build.add_argument("--offline", action="store_true", help="Use only the locally restored NuGet package cache")
+    symbols = commands.add_parser("symbols", help="Find exact type names without decompiling an entire assembly")
+    symbols.add_argument("query")
+    symbols.add_argument("--assembly")
+    symbols.add_argument("--limit", type=int, default=20)
+    bump = commands.add_parser("bump", help="Back up and update a mod's version fields together")
+    bump.add_argument("name")
+    bump.add_argument("target", help="patch, minor, major, or an explicit increasing X.Y.Z")
     inspect = commands.add_parser("inspect", help="Decompile one exact type with official ILSpy")
     inspect.add_argument("type_name")
     inspect.add_argument("--assembly")
@@ -61,6 +68,11 @@ def main(argv=None) -> int:
             value = core.build(args.name, args.locked, args.offline)
         elif args.command == "inspect":
             value = core.inspect(args.type_name, args.assembly, args.member)
+        elif args.command == "symbols":
+            value = core.symbols(args.query, args.assembly, args.limit)
+        elif args.command == "bump":
+            from .project_ops import bump
+            value = bump(args.name, args.target)
         elif args.command == "package":
             value = core.package_mod(args.name)
         elif args.command == "validate":
