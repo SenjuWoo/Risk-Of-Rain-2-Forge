@@ -1,5 +1,15 @@
 # Validation history
 
+## 1.2.0 WIP — tooling freshness and recovery
+
+- Full `.venv\Scripts\python.exe -m unittest discover -s tests -v`: **80 tests**, exit 0, including real MCP transport. Logs: artifacts/health-tests.*. `.venv\Scripts\python.exe -m compileall -q ror2forge scripts tests`: exit 0.
+- `forge.cmd updates`: exit 0, complete true, updates_available 0, all six tracked pins current according to official metadata. Evidence: artifacts/health-updates-live.json. Tests cover unsorted/prerelease versions, GameLibs revisions, excluded Unity/loader generations, malformed/oversized responses, partial feed failures and CLI exit/report preservation.
+- `forge.cmd setup --offline`: exit 0, correct MCP/ILSpy/TCLI versions. Python executable mtime stayed unchanged: the healthy environment was reused. Evidence: artifacts/health-offline-setup.json. Pin-change fixture tests prove stale offline rejection, failed-download preservation, staged successful refresh with backups and cache-swap rollback. No unrequested different MCP release was installed; pip installation is not a complete environment transaction.
+- Doctor tests separate game-free build capability from inspection and SDK inventory. Independent review reproduced an unavailable SDK selected by global.json despite newer SDKs being installed; readiness now uses `dotnet --version` from the forge root and reports resolution errors. Project-local overrides are still evaluated by the actual project build. Live report: artifacts/health-doctor-live.json.
+- Existing template code, compile reference pins, NuGet config and build/package logic were unchanged. Prior real build/package proof remains valid; protected-main CI still performs fresh setup, 80 tests and both full template smoke workflows on every PR/main commit.
+- Audit sources: official [ILSpy feed](https://api.nuget.org/v3-flatcontainer/ilspycmd/index.json), [TCLI feed](https://api.nuget.org/v3-flatcontainer/tcli/index.json), [MCP PyPI metadata](https://pypi.org/pypi/mcp/json), [BepInEx service index](https://nuget.bepinex.dev/v3/index.json), [R2Wiki Unity guidance](https://risk-of-thunder.github.io/R2Wiki/Mod-Creation/Unity-Version/) and [assembly reference guidance](https://risk-of-thunder.github.io/R2Wiki/Mod-Creation/C%23-Programming/Assembly-References/). RoR2BepInExPack 1.49.0 and R2API.RecalculateStats 1.7.0 also remain latest in their current Thunderstore metadata.
+- Game/host-client/editor validation remains unperformed; existing NU1701 and third-party redistribution limits remain documented. No game/profile/config/model changes or global server registration.
+
 ## 1.1.0 WIP — symbol discovery and version iteration
 
 ### Remote convergence and resume audit — 2026-10-29

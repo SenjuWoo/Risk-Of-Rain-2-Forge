@@ -27,3 +27,13 @@ Offline setup has been tested from a fresh isolated root using the retained tool
 The stats template's transitive MMHOOK.RoR2 2026.10.8 package declares a .NET Framework asset, so NuGet reports NU1701 when referenced by netstandard2.1. The build succeeds; warnings remain visible in build logs/JSON receipts. This is not silently suppressed and runtime compatibility still needs a game session.
 
 After game/tool updates: run doctor, inspect relevant changed APIs, resolve and deliberately update exact pins, restore a lock, build, package, then repeat runtime testing. Never replace a known-good release artifact with different bytes. Preserve old receipts/packages for rollback. Delete/reinstall only owned tool outputs if repair is needed; keep projects, lock files and artifacts.
+
+## On-demand freshness and recovery (1.2.0 WIP)
+
+`forge updates` reads official NuGet/PyPI metadata without applying changes. It discovers the BepInEx PackageBaseAddress from the configured official service index, orders version lists numerically, retains GameLibs r.N revisions, and keeps Unity/BepInEx reference candidates in their pinned line/generation. Unknown or unsupported metadata stays unknown and exits nonzero. A newer candidate is not proof of game or editor compatibility.
+
+The 2026-10-29 live audit found all six tracked pins current: ILSpy 11.2.0.10050, TCLI 0.2.4, MCP 2.3.0, BepInEx.Core 5.4.21, GameLibs 1.5.0-r.1 and Unity modules 2021.3.45. The current [R2Wiki Unity guidance](https://risk-of-thunder.github.io/R2Wiki/Mod-Creation/Unity-Version/) also agrees with the observed 2021.3.45f2 runtime. No pin was changed merely to increase a version number.
+
+When the desired MCP pin changes, online setup downloads into a fresh staging cache and creates a hash lock before swapping the retained cache. Prior wheels/lock remain in tools/cache/backups; failed downloads or cache swaps preserve/restore them. A stale/missing offline lock fails before changing the working environment/tools. Healthy Python+pip is reused rather than recreating the environment. Pip's cache is scoped to tools/cache/pip. Pip installation itself is not a transaction for the entire environment; an installation failure can still require repair. Exact pin-changing download/failure cases are tested with fixtures rather than installing an unrequested SDK release.
+
+Expansion priorities are in docs/ROADMAP.md: runtime and host/client proof, verified content templates, then a matching editor import/bundle workflow. These remain separately scoped work rather than silently adding large editors or global bridges.

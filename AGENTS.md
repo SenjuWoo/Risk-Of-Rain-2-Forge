@@ -14,3 +14,5 @@ The default interface is `forge.cmd` (Windows), or `python forge.py` with Python
 - Compile, packaging, loader, gameplay and multiplayer checks are separate evidence. Record exact gaps.
 
 The reusable skill is `skills/ror2-forge/SKILL.md`. Setup installs tools only inside this root; see `README.md` and `docs/TOOLCHAIN.md`. Other repositories are not required.
+
+Use `updates` on demand to investigate version drift; never treat unknown feed results as current or automatically apply a higher Unity/loader major. The report changes no pins and starts no background service.

@@ -12,6 +12,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 import zipfile
 from email.parser import BytesParser
 from xml.etree import ElementTree
@@ -52,6 +53,8 @@ def dotnet_env(root: Path = ROOT) -> dict[str, str]:
         "DOTNET_CLI_HOME": str(cache / "dotnet-home"),
         "NUGET_PACKAGES": str(cache / "packages"),
         "NUGET_HTTP_CACHE_PATH": str(cache / "http"),
+        "PIP_CACHE_DIR": str(cache / "pip"),
+        "PIP_DISABLE_PIP_VERSION_CHECK": "1",
         "TMP": str(cache / "tmp"),
         "TEMP": str(cache / "tmp"),
         "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1",
@@ -90,6 +93,68 @@ def _wheel_lock(wheels: Path) -> str:
     if not entries:
         raise ValueError("No cached wheels; run setup online once on this Python/platform.")
     return "\n".join(entries) + "\n"
+
+
+def _locked_mcp(text: str) -> str | None:
+    pins = [line.strip().split()[0][5:] for line in text.splitlines()
+            if line.strip().lower().startswith("mcp==")]
+    return pins[0] if len(pins) == 1 else None
+
+
+def _python_ready(python: Path, root: Path) -> bool:
+    try:
+        _run([str(python), "-c", "import pip"], root, timeout=30)
+        return True
+    except (OSError, RuntimeError, subprocess.TimeoutExpired):
+        return False
+
+
+def _prepare_python_cache(root: Path, offline: bool) -> None:
+    """Resolve a changed pin before touching the working environment or tools."""
+    cache = root / "tools/cache"
+    lock, wheels = cache / "python-requirements.lock", cache / "wheels"
+    if lock.is_file() and _locked_mcp(lock.read_text(encoding="utf-8")) == MCP_VERSION:
+        return
+    if offline:
+        raise RuntimeError(f"Missing or stale Python lock for mcp=={MCP_VERSION}; run setup online once. Working tools and environment were preserved.")
+    cache.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="python-download-", dir=cache) as temporary:
+        staging = Path(temporary)
+        staged_wheels = staging / "wheels"
+        staged_wheels.mkdir()
+        python = Path(sys.executable)
+        if not _python_ready(python, root):
+            _run([str(python), "-m", "venv", str(staging / "bootstrap")], root)
+            python = staging / "bootstrap" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        _run([str(python), "-m", "pip", "download", "--only-binary", ":all:",
+              "--index-url", "https://pypi.org/simple", "--dest", str(staged_wheels),
+              f"mcp=={MCP_VERSION}"], root)
+        text = _wheel_lock(staged_wheels)
+        if _locked_mcp(text) != MCP_VERSION:
+            raise RuntimeError("Downloaded wheel metadata does not match the requested MCP pin.")
+        staged_lock = staging / "python-requirements.lock"
+        staged_lock.write_text(text, encoding="utf-8")
+        backups = cache / "backups"
+        backups.mkdir(exist_ok=True)
+        backup = Path(tempfile.mkdtemp(prefix="python-cache-", dir=backups))
+        originals, installed = [], []
+        try:
+            for target in (wheels, lock):
+                if target.exists():
+                    os.replace(target, backup / target.name)
+                    originals.append(target)
+            for staged, target in ((staged_wheels, wheels), (staged_lock, lock)):
+                os.replace(staged, target)
+                installed.append(target)
+        except BaseException:
+            for target in reversed(installed):
+                if target.is_dir():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+            for target in reversed(originals):
+                os.replace(backup / target.name, target)
+            raise
 
 
 def _cache_packages(root: Path) -> list[dict]:
@@ -132,7 +197,8 @@ def setup(root: Path = ROOT, offline: bool = False) -> dict:
     if int(sdk.split(".", 1)[0]) < 10:
         raise RuntimeError(f".NET 10 SDK required by ilspycmd; discovered {sdk}.")
     cache = root / "tools/cache"
-    for path in (root / "tools/bin", cache / "wheels", cache / "nuget"):
+    _prepare_python_cache(root, offline)
+    for path in (root / "tools/bin", cache / "nuget"):
         path.mkdir(parents=True, exist_ok=True)
     # A private config prevents personal feeds/credentials from becoming build inputs.
     config = cache / "tool-sources.config"
@@ -153,16 +219,10 @@ def setup(root: Path = ROOT, offline: bool = False) -> dict:
                   "--tool-path", str(root / "tools/bin"), "--configfile", str(config)], root)
     paths = tool_paths(root)
     python = Path(paths["python"])
-    # Re-run without --clear so an interrupted ensurepip is repaired in place.
-    _run([sys.executable, "-m", "venv", str(root / ".venv")], root)
+    # Preserve a healthy environment; repair an interrupted ensurepip only when needed.
+    if not python.is_file() or not _python_ready(python, root):
+        _run([sys.executable, "-m", "venv", str(root / ".venv")], root)
     lock = cache / "python-requirements.lock"
-    if not lock.is_file():
-        if offline:
-            raise RuntimeError("No Python dependency lock; run setup online once before offline setup.")
-        _run([str(python), "-m", "pip", "download", "--only-binary", ":all:",
-              "--index-url", "https://pypi.org/simple", "--dest", str(cache / "wheels"),
-              f"mcp=={MCP_VERSION}"], root)
-        lock.write_text(_wheel_lock(cache / "wheels"), encoding="utf-8")
     _run([str(python), "-m", "pip", "install", "--no-index", "--require-hashes",
           "--find-links", str(cache / "wheels"), "-r", str(lock)], root)
     mcp = _run([str(python), "-c", "import importlib.metadata; print(importlib.metadata.version('mcp'))"], root)
