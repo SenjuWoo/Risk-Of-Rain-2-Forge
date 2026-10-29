@@ -16,6 +16,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--debug", action="store_true", help="Include a diagnostic traceback on stderr")
     commands = result.add_subparsers(dest="command", required=True)
     commands.add_parser("doctor", help="Discover game, profiles and installed tools without changing them")
+    commands.add_parser("updates", help="Check official package feeds on demand without changing pins or installing updates")
     setup = commands.add_parser("setup", help="Install pinned tools locally, reusing existing Python/.NET")
     setup.add_argument("--offline", action="store_true")
     new = commands.add_parser("new", help="Create an owned mod in projects/NAME")
@@ -62,6 +63,9 @@ def main(argv=None) -> int:
             value = setup(offline=args.offline)
         elif args.command == "doctor":
             value = core.doctor()
+        elif args.command == "updates":
+            from .updates import check_updates
+            value = check_updates()
         elif args.command == "new":
             value = core.new_mod(args.name, args.author, args.template, args.description)
         elif args.command == "build":
@@ -84,7 +88,7 @@ def main(argv=None) -> int:
         else:
             value = core.guide(args.topic)
         print(json.dumps(value, ensure_ascii=True))
-        return 1 if value.get("valid") is False else 0
+        return 1 if value.get("valid") is False or value.get("complete") is False else 0
     except Exception as exc:
         print(json.dumps({"error": str(exc), "command": args.command, "type": type(exc).__name__}), file=sys.stderr)
         if args.debug:

@@ -130,19 +130,25 @@ def discover() -> dict:
 
 
 def doctor() -> dict:
-    from .toolchain import tool_paths
+    from .toolchain import dotnet_env, tool_paths
     tools = tool_paths()
     environment = discover()
     missing = [name for name, path in tools.items() if not Path(path).is_file()]
     sdk = shutil.which("dotnet")
     sdk_versions = []
+    selected_sdk, sdk_error = None, None
     if sdk:
-        probe = subprocess.run([sdk, "--list-sdks"], capture_output=True, text=True, timeout=15)
+        probe = subprocess.run([sdk, "--list-sdks"], capture_output=True, text=True, cwd=ROOT, env=dotnet_env(), timeout=15)
         if probe.returncode == 0:
             sdk_versions = [line.split()[0] for line in probe.stdout.splitlines() if line.strip()]
+        selected = subprocess.run([sdk, "--version"], capture_output=True, text=True, cwd=ROOT, env=dotnet_env(), timeout=15)
+        if selected.returncode == 0 and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[\w.-]+)?", selected.stdout.strip()):
+            selected_sdk = selected.stdout.strip()
+        else:
+            sdk_error = (selected.stderr or selected.stdout).strip()[:1000] or "The .NET SDK could not be resolved from the forge root."
     return {"forge": __version__, "python": os.sys.version.split()[0], "python_executable": os.sys.executable,
-            "dotnet": sdk, "sdks": sdk_versions, "tools": tools, "missing_tools": missing, **environment,
-            "ready_for_build": bool(sdk_versions) and bool(environment.get("game_dir")),
+            "dotnet": sdk, "sdks": sdk_versions, "selected_sdk": selected_sdk, "sdk_error": sdk_error, "tools": tools, "missing_tools": missing, **environment,
+            "ready_for_build": selected_sdk is not None and int(selected_sdk.split(".")[0]) >= 8,
             "ready_for_inspection": "ilspycmd" not in missing and bool(environment.get("game_dir")),
             "runtime_verified": False, "setup_command": "forge setup" if missing else None}
 

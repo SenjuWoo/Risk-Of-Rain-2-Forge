@@ -22,3 +22,12 @@ Scope reaches CLI/parser, core operations, two templates, dependency pins, local
 - Prove: real installed assembly search; class/nested/interface/enum/struct/delegate discovery from a compiled fixture; actual patch bump, stale-package rejection, locked rebuild and both old/new ZIP preservation. PR checks and main checks must pass; query security alerts after pushes.
 - Excluded this iteration: game launches/profile edits, large editor installs, stable binary releases and speculative new dependency/asset frameworks.
 - Local completion: 55 tests and the real end-to-end smoke pass after independent review. Publish via PR and verify required checks plus alerts before merge; retain GitHub's exact-commit results as integration evidence.
+
+## 1.2.0 WIP: freshness and setup recovery
+
+- Audit current official feeds and installed reality before changing pins. Current primary metadata still matches pinned ILSpy/TCLI/MCP and RoR2 framework versions; no blind major upgrades.
+- Add read-only, on-demand `updates` JSON report. Report compatibility-scoped candidates, sources and unknown failures explicitly. No background monitoring, automatic pin changes or added MCP schema.
+- Repair MCP setup when requirements change: preflight cached identity, preserve working environment/cache on failed download or offline mismatch, stage new cached wheels/lock before replacement. Keep conflicting .NET tool pins explicit.
+- Fix doctor build readiness to reflect the compatible SDK, independently of a game install; inspection still needs an assembly.
+- Reach: toolchain/core/CLI, tests, help/agent docs, version/changelog/state and verified protected-main PR. Reuse existing packages and preserve game/profile/personal settings. No game launch, editor install or stable binary release.
+- Local gate complete: 80 tests, live six-package freshness check, actual offline setup with unchanged Python mtime, selected-SDK diagnostics and independent review. Required PR/main CI performs fresh setup and unchanged real template smoke workflows; converge exact SHA and query all three alert endpoints before handoff.

@@ -36,6 +36,7 @@ A Steam copy of Risk of Rain 2 is needed for installed-assembly inspection and g
 | Command | Purpose |
 |---|---|
 | `doctor` | Read-only Steam/game/Unity/profile/tool discovery, including game assembly hash |
+| `updates` | Query official package feeds on demand; report current pins, scoped candidates and lookup failures |
 | `setup [--offline]` | Restore pinned tools into this workspace |
 | `new NAME --author TEAM [--template plugin\|stats]` | Create an owned mod without replacing source |
 | `build NAME [--locked] [--offline]` | Restore and compile, with source/DLL evidence and a build log |
@@ -70,6 +71,10 @@ To iterate on a generated mod:
 
 Normal output is JSON; errors use a nonzero exit. Invalid ZIPs return their JSON report on stdout with exit 1. `--debug` before the command adds a traceback on stderr. Build logs and receipts live in each mod's `build/` folder.
 
+Run `forge.cmd updates` when refreshing the workbench or investigating a game/tool update. It checks metadata without installing anything or changing pins. Reference candidates stay scoped to the template's loader/Unity line; a newer game reference still needs compatibility verification. Failed lookups are reported as unknown and produce exit 1, rather than pretending everything is current. This command has no background schedule and adds no MCP tool.
+
+`doctor` reports build readiness independently of game discovery: the templates can compile with a compatible SDK and NuGet references on a machine without RoR2. It reports the SDK selected from the forge root, its resolution error if any, and the separate installed-SDK inventory. A project's own global.json may select another SDK; its build remains authoritative. Default game inspection still needs the installed assembly. Setup's complete toolchain requires .NET 10 for ILSpy.
+
 Discovery reads Steam's registry/library manifests and r2modman data. Override it with `ROR2_GAME_DIR` / `ROR2_MODMAN_DIR`, or a private `forge.local.json` containing `game_dir` / `modman_dir`. The manager directory is the **RiskOfRain2** directory containing `profiles/`. No profile is changed.
 
 ## Assets, content and multiplayer
@@ -90,7 +95,7 @@ CLI use requires no MCP configuration. If a particular agent host benefits from 
 }
 ```
 
-This is a server entry example, not a provider-specific full config. Nothing here installs it into personal/global settings. Eight typed tools and two guide resources expose the original workflow. New `symbols` and `bump` operations use the CLI, keeping this optional schema small. A host must start the server before tools are callable; stop it when the RoR2 task ends. [The agent guide](docs/AGENT_GUIDE.md) and [reusable skill](skills/ror2-forge/SKILL.md) work with CLI-only agents too.
+This is a server entry example, not a provider-specific full config. Nothing here installs it into personal/global settings. Eight typed tools and two guide resources expose the original workflow. New `symbols`, `bump` and `updates` operations use the CLI, keeping this optional schema small. A host must start the server before tools are callable; stop it when the RoR2 task ends. [The agent guide](docs/AGENT_GUIDE.md) and [reusable skill](skills/ror2-forge/SKILL.md) work with CLI-only agents too.
 
 ## Validation and boundaries
 

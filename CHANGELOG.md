@@ -1,3 +1,9 @@
+# 1.2.0 — WIP / unreleased
+
+- Add on-demand official-feed update checks with compatibility-scoped reference candidates and explicit partial failures; no automatic upgrades or background services.
+- Repair stale MCP cache/lock handling when the desired SDK pin changes, preserving working data on failed downloads/offline mismatches.
+- Correct doctor build readiness for NuGet-based template builds without an installed game, checking for an SDK that supports the template language.
+
 # 1.1.0 — WIP / unreleased
 
 - `symbols`: bounded, case-insensitive exact type discovery through pinned ILSpy, including nested types, interfaces, structs, enums and delegates; no background index.

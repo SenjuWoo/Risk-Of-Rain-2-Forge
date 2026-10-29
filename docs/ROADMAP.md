@@ -7,6 +7,7 @@
 - Exact assembly inspection, read-only discovery/log triage and deterministic guarded packaging.
 - Tests plus clean-runner template compilation/package CI.
 - Bounded symbol search through ILSpy and backed-up version bumps for the edit/build/package loop (1.1.0 WIP).
+- On-demand dependency freshness reports, MCP cache recovery and game-free build diagnostics (1.2.0 WIP).
 
 ## Before a stable release
 
@@ -19,3 +20,10 @@
 ## Deliberately optional
 
 Editor bridges, paid asset APIs and other MCP servers are enabled only for a concrete RoR2 task. Public source does not bundle game files or third-party tool binaries; redistribution terms must be checked before any binary release. No stable release date is promised.
+
+## Next expansion priorities
+
+1. Capture repeatable loader/gameplay and host/client evidence for existing templates in a deliberately selected test profile.
+2. Add item/content templates only after verifying current content-provider registration, module GUIDs and multiplayer behavior; avoid stale copied boilerplates.
+3. Validate a matching-Unity EditorKit/ThunderKit asset project, including import/build/runtime shader checks, before automating it.
+4. Replace restricted literal version editing with compiler-aware editing when supporting complex custom source (including raw C# strings) becomes a scoped requirement.
