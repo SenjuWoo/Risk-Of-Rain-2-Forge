@@ -282,13 +282,38 @@ def build(name: str, locked: bool = False, offline: bool = False) -> dict:
     return receipt
 
 
+def assembly_path(assembly: str | None = None) -> Path:
+    selected = Path(assembly).resolve() if assembly else Path(discover().get("assembly") or "")
+    if not selected.is_file() or selected.suffix.lower() != ".dll":
+        raise ValueError("A readable managed DLL is required; run doctor or pass --assembly.")
+    return selected
+
+
+def symbols(query: str, assembly: str | None = None, limit: int = 20) -> dict:
+    """Search ILSpy's type inventory rather than decompiling an assembly into context."""
+    from .toolchain import tool_command
+    if not query.strip() or len(query) > 256 or any(ord(char) < 32 for char in query):
+        raise ValueError("Supply a nonempty type search of at most 256 characters without control characters.")
+    if not 1 <= limit <= 200:
+        raise ValueError("Return 1–200 symbols.")
+    selected = assembly_path(assembly)
+    result = run_process(tool_command("ilspycmd") + ["--disable-updatecheck", "--list", "cisde", str(selected)], cwd=ROOT, timeout=180)
+    matches = []
+    for line in result.stdout.splitlines():
+        kind, separator, name = line.partition(" ")
+        # Compiler-generated helper names are not useful entry points for mod authors.
+        if separator and "<" not in name and query.casefold() in name.casefold():
+            matches.append({"kind": kind.lower(), "name": name})
+    matches.sort(key=lambda item: (item["name"].casefold() != query.casefold(), item["name"].casefold(), item["kind"]))
+    return {"assembly": str(selected), "assembly_sha256": sha256(selected), "query": query,
+            "total": len(matches), "truncated": len(matches) > limit, "symbols": matches[:limit], "redistribute": False}
+
+
 def inspect(type_name: str, assembly: str | None = None, member: str | None = None) -> dict:
     from .toolchain import tool_command
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.+`]*", type_name):
         raise ValueError("Supply an exact .NET type name, e.g. RoR2.CharacterBody.")
-    selected = Path(assembly).resolve() if assembly else Path(discover().get("assembly") or "")
-    if not selected.is_file() or selected.suffix.lower() != ".dll":
-        raise ValueError("A readable managed DLL is required; run doctor or pass --assembly.")
+    selected = assembly_path(assembly)
     if member and (len(member) > 1000 or not re.fullmatch(r"[A-Za-z0-9_:.,+`{}()\[\]#@*]+", member)):
         raise ValueError("Use an ILSpy XML documentation member ID or metadata token.")
     selector = ["--member", member] if member else ["--type", type_name]
@@ -406,6 +431,18 @@ def validate(archive: str | Path) -> dict:
     return {"valid": not errors, "archive": str(path), "sha256": sha256(path), "files": names, "errors": errors, "runtime_verified": False}
 
 
+def plugin_version_declaration(source: str) -> re.Match:
+    """Find the generated literal declaration without treating comments as code."""
+    # shortcut: raw C# strings need a syntax-aware editor; refuse them instead of guessing.
+    if '\"\"\"' in source:
+        raise ValueError("Raw C# strings are unsupported by the automated version preflight.")
+    tokens = re.compile(r'//[^\r\n]*|/\*[\s\S]*?\*/|@"(?:""|[^"])*"|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|\bconst\s+string\s+PluginVersion\s*=\s*"(?P<version>[^"\r\n]+)"\s*;')
+    declarations = [match for match in tokens.finditer(source) if match.group("version") is not None]
+    if len(declarations) != 1:
+        raise ValueError("Expected one literal const string PluginVersion declaration.")
+    return declarations[0]
+
+
 def package_mod(name: str) -> dict:
     folder, csproj, metadata = project_files(name)
     safe_name(metadata["author"])
@@ -420,7 +457,7 @@ def package_mod(name: str) -> dict:
     if manifest["name"] != name or manifest["version_number"] != metadata["version"] or ET.parse(csproj).findtext(".//Version") != metadata["version"]:
         raise ValueError("Manifest, forge.json and csproj name/version must agree.")
     plugin_source = (folder / "src/Plugin.cs").read_text(encoding="utf-8")
-    if f'PluginVersion = "{metadata["version"]}"' not in plugin_source:
+    if plugin_version_declaration(plugin_source).group("version") != metadata["version"]:
         raise ValueError("PluginVersion must agree with the package version.")
     if receipt.get("source_sha256") != source_digest(folder) or receipt.get("assembly_sha256") != sha256(dll):
         raise ValueError("Source or DLL changed since the successful build; build again before packaging.")

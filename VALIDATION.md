@@ -1,4 +1,17 @@
-# Validation — 1.0.0, 2026-10-27
+# Validation history
+
+## 1.1.0 WIP — symbol discovery and version iteration
+
+- Full `.venv\Scripts\python.exe -m unittest discover -s tests -v`: **55 tests**, exit 0. Includes the real official MCP transport; no new MCP tools or global registration. Local logs: artifacts/iteration-tests.*.
+- `.venv\Scripts\python.exe scripts/ci_smoke.py`: exit 0 after final shared-parser fix. Both templates compile a fixture containing class/nested class/interface/struct/enum/delegate types, discover all through installed ILSpy, and decompile the nested type. The smoke test deliberately removes whitespace around PluginVersion to verify interoperability.
+- Both fixtures build online, rebuild locked/offline with identical assembly hashes, package reproducibly, bump 1.0.0 to 1.0.1, reject packaging before rebuilding, then rebuild/package successfully while retaining the previous ZIP. Logs: artifacts/iteration-ci-smoke.*. Original smoke fixtures/output preserved separately; no user mods or profiles were overwritten.
+- `forge.cmd symbols RoR2.CharacterBody --limit 5`: exit 0 against the installed assembly. 25 matches, 5 returned, truncation true, exact type first; assembly SHA256 remains `48f2758cccbe1a5efba88cffe0a68631953f489a71a92726572c15a4c57ff90c`. Evidence: artifacts/symbols-live-proof.json.
+- Unit tests inject replacement/final-receipt failures and confirm byte-for-byte source rollback and retained backups. They also exercise manifest mismatch, duplicate/custom declarations, comment/string decoys, BOM/CRLF preservation, prior-artifact preservation and invalid targets. Unsupported raw C# string delimiters are refused by automated version preflight rather than guessed.
+- Independent review reproduced a spacing mismatch between bump and package preflight; both now use the same declaration parser, with positive spacing and negative comment-decoy regressions. No additional blockers were found in the scoped review.
+- Local bumped ZIP hashes: CIPlugin 1.0.1 `8b003e88107fa62802e400bb551189837e6ee4e4c4169b1b133f2d406cad0d8f`; CIStats 1.0.1 `d40a7d3544b1c25f5969866ef01b9ea690c175589a395dbe25f327dab028a35f`. These fixtures are private evidence, not public runtime-certified mods.
+- Game/Unity/host-client tests remain **not run**; MMHOOK's existing NU1701 warning remains visible. WIP source uses PR-required CI/CodeQL; exact remote checks are recorded by GitHub for each pushed SHA. No stable release is produced.
+
+## 1.0.0 baseline — 2026-10-27
 
 | Gate | Result |
 |---|---|
@@ -43,7 +56,7 @@ Each contains root README.md, icon.png, manifest.json and plugins/NAME/NAME.dll.
 - Publicized/stripped compile references do not grant private-member runtime access. Runtime APIs/hooks/network behavior still require per-mod testing.
 - Source receipts cover project inputs and conventional ancestor build settings. Arbitrary external MSBuild imports, hostile build scripts, concurrent input races, future game patches and other platforms were not certified. Keep owned source trusted and one writer per project.
 - No editor/EditorKit/ThunderKit MCP was registered without an editor project. Asset authoring route is documented; actual matching editor/import workflow remains task-specific.
-- TCLI is locally installed/version-tested; the guarded deterministic packager is the default. TCLI upload was never used. Its public redistribution permission is unverified; no public forge archive/repository was created.
+- TCLI is locally installed/version-tested; the guarded deterministic packager is the default. TCLI upload was never used. Its public redistribution permission is unverified; no public binary forge archive was created; the subsequent WIP publication contains source only.
 - Receipts record HTTPS sources and observed hashes, not independent vendor signatures. Personal feeds/credentials/settings were not copied.
 
 ## Primary sources
@@ -56,3 +69,7 @@ Each contains root README.md, icon.png, manifest.json and plugins/NAME/NAME.dll.
 
 Public MIT source publication authorized 2026-10-27. CI installs official pinned tools on a clean Windows runner, runs all tests and compiles/packages both templates without a game installation. Remote exact-SHA result is recorded in the publication handoff after verification. Local evidence artifacts listed above are deliberately untracked and are not shipped by cloning.
 
+
+## First public source verification
+
+Commit `86d28d16ee14d1d41b462080eedc9b605e605234`: [clean Windows CI](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/runs/40588483635) and [CodeQL](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/runs/40588505433) completed successfully. All 33 tests, online/locked-offline builds for both templates, deterministic packages and the Windows launcher passed on the clean runner. CodeQL analysis records match that SHA with no analysis errors. Dependabot, code-scanning and secret-scanning queries each returned zero open alerts. Public/MIT/main, dependency alerts/security updates, private vulnerability reporting and secret scanning/push protection were read back from GitHub. Code quality setup/findings returned 404 and were left off. No release/tag or third-party binary upload was made. Subsequent commits are checked by the same CI; consult Actions for the current HEAD.

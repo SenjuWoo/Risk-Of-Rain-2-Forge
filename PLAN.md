@@ -13,3 +13,12 @@ Completion means passing automated tests plus real restore/build/package and too
 Status: all five steps completed locally. See STATE.md and VALIDATION.md for 33 passing tests, actual locked/offline builds, package hashes, optional MCP proof and exact runtime/editor gaps. User clarified CLI preference; no MCP is auto-started or globally registered.
 
 Scope reaches CLI/parser, core operations, two templates, dependency pins, local tools, MCP adapter, tests, launchers, docs and state. No existing callers/data exist. Main risks are stale game APIs, package drift, accidental profile writes, and redistribution of game assemblies; lock versions, enforce owned output paths and package an allowlisted payload.
+
+## 1.1.0 WIP: agent iteration
+
+- Search exact type inventories through installed ILSpy (`symbols`), returning a bounded JSON result with assembly hash. Do not add a parser/decompiler or a background service.
+- Back up and bump a mod's version fields together (`bump`), refusing inconsistent inputs and rolling back partial writes. Preserve prior artifacts and require a rebuild.
+- Reach: core/CLI helpers, a small project-operations module, unit tests, real CI smoke, agent docs, version/changelog and handoff state. MCP remains opt-in with its existing eight-tool surface; these additional operations use CLI.
+- Prove: real installed assembly search; class/nested/interface/enum/struct/delegate discovery from a compiled fixture; actual patch bump, stale-package rejection, locked rebuild and both old/new ZIP preservation. PR checks and main checks must pass; query security alerts after pushes.
+- Excluded this iteration: game launches/profile edits, large editor installs, stable binary releases and speculative new dependency/asset frameworks.
+- Local completion: 55 tests and the real end-to-end smoke pass after independent review. Publish via PR and verify required checks plus alerts before merge; retain GitHub's exact-commit results as integration evidence.
