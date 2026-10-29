@@ -4,7 +4,7 @@
 - Active source: `.`; original forge modules in ror2forge/, templates/, docs/, tests/ and launchers. Version 1.2.0 WIP in VERSION; protected main is updated through verified pull requests.
 - Versioning: semantic versions in VERSION/CHANGELOG.md; source remains in this root. Preserve known-good artifacts and receipts rather than duplicating source snapshots.
 - Repository: SenjuWoo/Risk-Of-Rain-2-Forge, public MIT WIP source; explicitly authorized by user on 2026-10-27.
-- Publication intent: publish source and verify CI/security. No stable binary release is requested. Keep generated mods, game files, tool binaries/caches and private evidence local.
+- Publication intent: public source and initial WIP source-kit prerelease explicitly authorized on 2026-10-29. Release v1.2.0 retains external tool setup; no stable binary release is requested. Keep generated mods, game files, tool binaries/caches and private evidence local.
 - Explicit GitHub publication: public and MIT for original work by default, subject to rights/platform terms; preserve existing licences. Generic publication uses the appropriate destination (Nexus for Skyrim); do not create duplicate source hosting for mods needing no compilation.
 - Existing-repository maintenance: preserve its remote/visibility and follow the requested update, documentation, push and release scope.
 - Read-only inputs: installed products, game Data/staging/saves and supplied references.

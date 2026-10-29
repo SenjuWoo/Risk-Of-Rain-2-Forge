@@ -12,6 +12,8 @@ Point an agent at this folder and tell it: **“Read AGENTS.md and use this forg
 
 ## Start
 
+Download the tested [initial source-kit prerelease](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/releases/tag/v1.2.0) and extract it, or clone the repository below. The release includes SHA-256 checksums and a build receipt; it remains WIP.
+
 Install [Python 3.11+](https://www.python.org/downloads/) and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). In PowerShell:
 
 ```powershell

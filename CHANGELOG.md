@@ -1,5 +1,6 @@
-# 1.2.0 — WIP / unreleased
+# 1.2.0 — Initial WIP prerelease (2026-10-29)
 
+- Publish the first source-kit release with pinned tool setup, templates, agent guides, checksums and a build receipt. Third-party tools install locally; their binaries and game files are excluded.
 - Add on-demand official-feed update checks with compatibility-scoped reference candidates and explicit partial failures; no automatic upgrades or background services.
 - Repair stale MCP cache/lock handling when the desired SDK pin changes, preserving working data on failed downloads/offline mismatches.
 - Correct doctor build readiness for NuGet-based template builds without an installed game, checking for an SDK that supports the template language.
