@@ -2,6 +2,14 @@
 
 ## 1.1.0 WIP — symbol discovery and version iteration
 
+### Remote convergence and resume audit — 2026-10-29
+
+- Feature [PR #2](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/pull/2) is merged. Exact merge SHA `28b917d6a8c611c5b7a94c825a12101990ebc2a3`: [CI passed](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/runs/40624926248), [CodeQL passed](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/runs/40624925628).
+- Reviewed newer upstream `ed005418fcb7f12f4928cf9512750cec83dc3de3` before keeping it: only .github/workflows/ci.yml changed, updating three immutable official Actions pins through Dependabot PR #1. [CI passed](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/runs/40803108409), [CodeQL passed](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/runs/40803107980); all four required check-runs returned completed/success on that exact SHA.
+- Clean local checkout fast-forwarded to the reviewed upstream. Retained local 55-test and real smoke logs were inspected; unchanged implementation was not rebuilt redundantly. Fresh Dependabot, code-scanning and secret-scanning alert queries each exited successfully with zero open alerts. Main remains PR-protected, including administrators.
+
+### Local implementation evidence
+
 - Full `.venv\Scripts\python.exe -m unittest discover -s tests -v`: **55 tests**, exit 0. Includes the real official MCP transport; no new MCP tools or global registration. Local logs: artifacts/iteration-tests.*.
 - `.venv\Scripts\python.exe scripts/ci_smoke.py`: exit 0 after final shared-parser fix. Both templates compile a fixture containing class/nested class/interface/struct/enum/delegate types, discover all through installed ILSpy, and decompile the nested type. The smoke test deliberately removes whitespace around PluginVersion to verify interoperability.
 - Both fixtures build online, rebuild locked/offline with identical assembly hashes, package reproducibly, bump 1.0.0 to 1.0.1, reject packaging before rebuilding, then rebuild/package successfully while retaining the previous ZIP. Logs: artifacts/iteration-ci-smoke.*. Original smoke fixtures/output preserved separately; no user mods or profiles were overwritten.
