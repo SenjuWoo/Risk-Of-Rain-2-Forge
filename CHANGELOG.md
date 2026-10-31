@@ -1,3 +1,9 @@
+# 1.4.0 — Audio route (2026-10-31)
+
+- Add `docs/AUDIO.md`: the measured truth about audio in Risk of Rain 2 (Unity audio disabled, Wwise 2023.1 only), the two viable routes — a real Wwise sound bank with R2API.Sound, or an OS output stream with its spatialisation and mixer costs — and the four interop bugs that cause silence, noise bursts or a beeping exit. Includes a check-it-yourself snippet and a verification checklist that works without ears.
+- `forge doctor` now reports installed Wwise authoring versions and whether a 2023.1 install is ready to generate sound banks.
+- `forge guide audio` returns the new document.
+
 # 1.3.0 — Character pipeline (2026-10-30)
 
 - Add `docs/CHARACTER_PIPELINE.md`: the verified route for building a playable survivor from another game's assets without a Unity editor — source extraction, mesh/rig/clip conversion, baked runtime packs, the minimum working body (clone, hurtbox, camera, death state, skills, skins, `SurvivorDef`), the verification loop, failure modes and licensing. Proven on a 44-skin character shipped as a 45.9 MB package.
