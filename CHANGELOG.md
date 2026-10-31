@@ -1,3 +1,9 @@
+# 1.5.0 — Project audit (2026-10-31)
+
+- Add `forge audit <mod dir>`: cross-checks C# against the package manifest. Every `using R2API.<Module>` and every `[BepInDependency("com.bepis.r2api.<module>")]` must have a matching `RiskofThunder-R2API_<Module>` dependency, which is the silent "the plugin never loads for users" failure. It also warns when searchable/achievement attributes are used without `[assembly: HG.Reflection.SearchableAttribute.OptIn]`.
+- Deliberately no GUID guessing for non-R2API dependencies: an early heuristic produced false positives, so those are skipped rather than reported.
+- 3 regression tests, including the undeclared-module case and the namespace-import case.
+
 # 1.4.1 — Install-layout validation (2026-10-31)
 
 - `forge validate` now fails a package whose files sit in a top-level folder that is not an install route (`plugins`, `patchers`, `config`, `core`, `monomod`, optionally under `BepInEx/`). The Thunderstore manager empties those folders into the package root, so a ZIP that looks correct and unzips correctly can still install as loose files and break on a missing path. This shipped broken once in a character mod; the validator reported it valid.

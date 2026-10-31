@@ -43,6 +43,8 @@ def parser() -> argparse.ArgumentParser:
     package.add_argument("name")
     validate = commands.add_parser("validate", help="Inspect a Thunderstore ZIP without extracting it")
     validate.add_argument("archive")
+    audit = commands.add_parser("audit", help="Cross-check R2API usage and BepInDependency GUIDs against the manifest")
+    audit.add_argument("project")
     logs = commands.add_parser("logs", help="Read and triage a profile log (latest log by default)")
     logs.add_argument("--path")
     logs.add_argument("--lines", type=int, default=250)
@@ -79,6 +81,8 @@ def main(argv=None) -> int:
             value = bump(args.name, args.target)
         elif args.command == "package":
             value = core.package_mod(args.name)
+        elif args.command == "audit":
+            value = core.audit_project(args.project)
         elif args.command == "validate":
             value = core.validate(args.archive)
         elif args.command == "logs":

@@ -482,6 +482,88 @@ def validate(archive: str | Path) -> dict:
     return {"valid": not errors, "archive": str(path), "sha256": sha256(path), "files": names, "errors": errors, "runtime_verified": False}
 
 
+
+# ---------------------------------------------------------------- project audit
+# R2API split into per-module assemblies at 5.0. A module used in code but missing from the manifest is the
+# most common "works on my machine, fails for users" bug: the plugin simply never loads. These checks compare
+# what the C# actually references against what the package declares.
+
+R2API_GUID_PREFIX = "com.bepis.r2api."
+
+
+def _norm(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def _source_files(root: Path) -> list[Path]:
+    skip = {"bin", "obj", ".git", "node_modules", "dist", "build"}
+    return [f for f in root.rglob("*.cs") if not skip & {part.lower() for part in f.parts}]
+
+
+def _manifest_for(root: Path) -> tuple[Path | None, dict]:
+    candidates = [p for p in root.rglob("manifest.json") if "bin" not in {x.lower() for x in p.parts} and "obj" not in {x.lower() for x in p.parts}]
+    if not candidates:
+        return None, {}
+    path = sorted(candidates, key=lambda p: len(p.parts))[0]
+    return path, json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def audit_project(root: str | Path) -> dict:
+    """Cross-check C# R2API usage and BepInDependency GUIDs against the package manifest."""
+    root = Path(root).resolve()
+    if not root.is_dir():
+        raise ValueError("audit needs a mod directory")
+    sources = _source_files(root)
+    manifest_path, manifest = _manifest_for(root)
+    if not sources:
+        raise ValueError("no C# sources found")
+    if not manifest:
+        raise ValueError("no manifest.json found")
+
+    declared = set()
+    for dep in manifest.get("dependencies", []):
+        parts = dep.split("-")
+        if len(parts) < 3:
+            continue
+        package = parts[1]
+        if package.lower().startswith("r2api_"):
+            package = package[len("r2api_"):]      # RiskofThunder-R2API_Skins vs GUID com.bepis.r2api.skins
+        declared.add(_norm(package))
+    declared_full = set(manifest.get("dependencies", []))
+
+    guids, imports = set(), set()
+    for path in sources:
+        text = path.read_text(encoding="utf-8-sig", errors="replace")
+        guids.update(re.findall(r'\[BepInDependency\(\s*"([^"]+)"', text))
+        imports.update(re.findall(r'^using\s+R2API\.([A-Za-z0-9_]+)\s*;', text, re.M))
+
+    errors, warnings = [], []
+
+    # 1. every R2API namespace used needs its own split module in the manifest
+    for module in sorted(imports):
+        if _norm(module) not in declared:
+            errors.append(f"using R2API.{module}; but no RiskofThunder-R2API_{module} dependency in {manifest_path.name}")
+
+    # 2. every BepInDependency GUID should correspond to a declared package
+    for guid in sorted(guids):
+        if guid.startswith(R2API_GUID_PREFIX):
+            module = guid[len(R2API_GUID_PREFIX):]
+            if _norm(module) not in declared:
+                errors.append(f"[BepInDependency(\"{guid}\")] but no matching R2API_{module} dependency in {manifest_path.name}")
+        # Non-R2API GUIDs (BepInEx, other mods) have no reliable GUID->package mapping; guessing produced
+        # false positives, so they are left alone. The R2API split is the failure this check exists for.
+
+    # 3. searchable attributes only work when the assembly opts in
+    joined = "\n".join(path.read_text(encoding="utf-8-sig", errors="replace") for path in sources)
+    if "SearchableAttribute.OptIn" not in joined and re.search(r"\[RegisterAchievement|\[Searchable", joined):
+        warnings.append("uses searchable/achievement attributes but no [assembly: HG.Reflection.SearchableAttribute.OptIn]")
+
+    return {"root": str(root), "manifest": str(manifest_path), "sources": len(sources),
+            "r2api_modules": sorted(imports), "dependency_guids": sorted(guids),
+            "dependencies_declared": len(declared_full), "errors": errors, "warnings": warnings,
+            "valid": not errors}
+
+
 def plugin_version_declaration(source: str) -> re.Match:
     """Find the generated literal declaration without treating comments as code."""
     # shortcut: raw C# strings need a syntax-aware editor; refuse them instead of guessing.

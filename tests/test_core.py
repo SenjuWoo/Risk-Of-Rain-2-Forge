@@ -219,6 +219,36 @@ class CoreTests(unittest.TestCase):
         self.assertIn("assets/", problems[0])
         self.assertIn("2 files", problems[0])
 
+    def _audit_mod(self, deps, source):
+        mod = self.root / "auditmod"
+        (mod / "src").mkdir(parents=True, exist_ok=True)
+        (mod / "package").mkdir(parents=True, exist_ok=True)
+        (mod / "src" / "Plugin.cs").write_text(source, encoding="utf-8")
+        (mod / "package" / "manifest.json").write_text(json.dumps({
+            "name": "AuditMod", "version_number": "1.0.0", "website_url": "", "description": "x", "dependencies": deps,
+        }), encoding="utf-8")
+        return mod
+
+    def test_audit_accepts_declared_split_module(self):
+        mod = self._audit_mod(["RiskofThunder-R2API_Skins-1.4.14"],
+                              '[BepInDependency("com.bepis.r2api.skins")]\nclass P {}')
+        result = core.audit_project(mod)
+        self.assertTrue(result["valid"], result["errors"])
+
+    def test_audit_rejects_undeclared_split_module(self):
+        # The exact bug this exists for: the attribute is there, the package dependency is not, and the
+        # plugin silently never loads for users.
+        mod = self._audit_mod([], '[BepInDependency("com.bepis.r2api.skins")]\nclass P {}')
+        result = core.audit_project(mod)
+        self.assertFalse(result["valid"])
+        self.assertIn("R2API_skins", result["errors"][0])
+
+    def test_audit_rejects_undeclared_namespace_import(self):
+        mod = self._audit_mod([], 'using R2API.Skins;\nclass P {}')
+        result = core.audit_project(mod)
+        self.assertFalse(result["valid"])
+        self.assertIn("using R2API.Skins", result["errors"][0])
+
     def test_guide_topics_resolve_to_existing_docs(self):
         # The character route must stay reachable through the CLI, not only by browsing docs/.
         # setUp repoints core.ROOT at a fixture, so read the real docs explicitly.
