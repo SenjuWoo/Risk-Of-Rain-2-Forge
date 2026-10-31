@@ -11,7 +11,7 @@ Run `forge.cmd doctor` first. For version drift, query `forge.cmd updates` on de
 
 1. Create `projects/<Name>` with `new <Name> --author <Team> --template plugin|stats`.
 2. Find exact type names with `symbols QUERY [--assembly <dll>] [--limit 20]`, then inspect with `inspect <Fully.Qualified.Type> [--assembly <dll>]` before using APIs/hooks.
-3. Apply only the needed route from `docs/RECIPES.md`; pin R2API modules and align compile/plugin/Thunderstore dependencies. For a new survivor built from another game's assets (model, rig, clips, textures) read `docs/CHARACTER_PIPELINE.md` first: it carries the proven runtime-built-model route, the minimum body recipe, and the failure modes that cost the most time.
+3. Apply only the needed route from `docs/RECIPES.md`; pin R2API modules and align compile/plugin/Thunderstore dependencies. For a new survivor built from another game's assets (model, rig, clips, textures) read `docs/CHARACTER_PIPELINE.md` first: it carries the proven runtime-built-model route, the minimum body recipe, and the failure modes that cost the most time. Before writing any audio code read `docs/AUDIO.md`: Unity audio is disabled in this game, the two viable routes and their costs are laid out there, and the four interop bugs that produce silence or a noise burst are named.
 4. Build, retain `packages.lock.json`, rebuild with `build <Name> --locked`, package, validate and inspect the actual ZIP. For updates use `bump <Name> patch|minor|major|X.Y.Z`, review its backup receipt and rebuild before creating the new package; keep the old ZIP.
 5. Record verified evidence and runtime gaps. Use a disposable mod-manager profile for human runtime testing; a build is not gameplay/multiplayer proof.
 

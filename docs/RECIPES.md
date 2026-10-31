@@ -16,6 +16,8 @@ Create definitions/prefabs and register them during the current content-provider
 
 A full playable **survivor** has its own route: `docs/CHARACTER_PIPELINE.md` carries the verified body recipe (clone, strip, hurtbox, camera, death state, skills, skins, `SurvivorDef`), the runtime-built-model pipeline for machines without a Unity editor, and the failure modes.
 
+Custom sound is its own problem: `docs/AUDIO.md` explains why `AudioClip`/`AudioSource` cannot work here, the Wwise 2023.1 bank route, the OS-mixer fallback and what it costs, and the interop bugs that make audio silent or hostile.
+
 Use the game’s existing shaders/material conventions and verified Addressables paths. The 1.5.0 migration changed equipment storage, projectile ghosts and some hooks, and obsoleted `CharacterBody.ItemBehavior`; inspect current replacement APIs rather than porting old snippets mechanically.
 
 ## Assets and Unity

@@ -199,13 +199,25 @@ class CoreTests(unittest.TestCase):
         # The character route must stay reachable through the CLI, not only by browsing docs/.
         # setUp repoints core.ROOT at a fixture, so read the real docs explicitly.
         with patch.object(core, "ROOT", REAL_ROOT):
-            for topic in ("overview", "code", "content", "assets", "networking", "debugging", "character"):
+            for topic in ("overview", "code", "content", "assets", "networking", "debugging", "character", "audio"):
                 result = core.guide(topic)
                 self.assertTrue(Path(result["path"]).is_file(), topic)
                 self.assertGreater(len(result["text"]), 200, topic)
             self.assertIn("survivor", core.guide("character")["text"].lower())
+            # The audio route has to name the trap, not just exist.
+            audio = core.guide("audio")["text"].lower()
+            self.assertIn("wwise", audio)
+            self.assertIn("audioclip", audio)
             with self.assertRaises(ValueError):
                 core.guide("nope")
+
+    def test_wwise_status_is_reported_and_pinned(self):
+        # Custom sound banks need Wwise 2023.1; doctor must say so even when nothing is installed.
+        status = core.wwise_status()
+        self.assertEqual(status["required"], "2023.1")
+        self.assertIsInstance(status["installs"], list)
+        if not status["ready"]:
+            self.assertIn("AUDIO.md", status["note"])
 
     def test_version_file_matches_package_version(self):
         # VERSION is documentation; ror2forge.__version__ is what doctor and the MCP server report.

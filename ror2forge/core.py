@@ -129,6 +129,23 @@ def discover() -> dict:
     return result
 
 
+
+def wwise_status() -> dict:
+    """Locate Wwise authoring installs. Custom sound banks cannot be built without one."""
+    roots = [Path(r"C:\Program Files (x86)\Audiokinetic"), Path(r"C:\Program Files\Audiokinetic")]
+    installs = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for directory in sorted(root.glob("Wwise *")):
+            console = directory / "Authoring" / "x64" / "Release" / "bin" / "WwiseConsole.exe"
+            installs.append({"path": str(directory), "version": directory.name.replace("Wwise ", ""),
+                             "console": str(console) if console.is_file() else None})
+    matching = [i for i in installs if i["version"].startswith("2023.1") and i["console"]]
+    return {"required": "2023.1", "installs": installs, "ready": bool(matching),
+            "note": None if matching else "No Wwise 2023.1 authoring install found; custom sound banks need it (account-gated download). See docs/AUDIO.md."}
+
+
 def doctor() -> dict:
     from .toolchain import dotnet_env, tool_paths
     tools = tool_paths()
@@ -150,6 +167,7 @@ def doctor() -> dict:
             "dotnet": sdk, "sdks": sdk_versions, "selected_sdk": selected_sdk, "sdk_error": sdk_error, "tools": tools, "missing_tools": missing, **environment,
             "ready_for_build": selected_sdk is not None and int(selected_sdk.split(".")[0]) >= 8,
             "ready_for_inspection": "ilspycmd" not in missing and bool(environment.get("game_dir")),
+            "wwise": wwise_status(),
             "runtime_verified": False, "setup_command": "forge setup" if missing else None}
 
 
@@ -535,7 +553,7 @@ def lookup(namespace: str, name: str, version: str | None = None) -> dict:
 
 
 def guide(topic: str = "overview") -> dict:
-    mapping = {"overview": "AGENT_GUIDE.md", "code": "RECIPES.md", "content": "RECIPES.md", "assets": "RECIPES.md", "networking": "RECIPES.md", "debugging": "RECIPES.md", "character": "CHARACTER_PIPELINE.md"}
+    mapping = {"overview": "AGENT_GUIDE.md", "code": "RECIPES.md", "content": "RECIPES.md", "assets": "RECIPES.md", "networking": "RECIPES.md", "debugging": "RECIPES.md", "character": "CHARACTER_PIPELINE.md", "audio": "AUDIO.md"}
     if topic not in mapping:
         raise ValueError(f"Unknown guide topic: {topic}")
     path = ROOT / "docs" / mapping[topic]
