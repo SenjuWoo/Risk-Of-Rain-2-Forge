@@ -1,3 +1,11 @@
+# 1.3.0 — Character pipeline (2026-10-30)
+
+- Add `docs/CHARACTER_PIPELINE.md`: the verified route for building a playable survivor from another game's assets without a Unity editor — source extraction, mesh/rig/clip conversion, baked runtime packs, the minimum working body (clone, hurtbox, camera, death state, skills, skins, `SurvivorDef`), the verification loop, failure modes and licensing. Proven on a 44-skin character shipped as a 45.9 MB package.
+- Record the engine facts that cost the most time, measured on the baseline build: Unity's audio subsystem is disabled and cannot be revived (`AudioClip.Create` returns an empty clip; Wwise 2023.1 only), `CharacterModel` owns renderer visibility, skin application replaces `baseRendererInfos`, and the vanilla teardown `NullReferenceException`s that look like mod errors.
+- Expose the route through the CLI as `forge guide character`; the recipes, agent guide, README, roadmap and reusable skill now route survivor work to it.
+- Add a regression test that every guide topic resolves to an existing document.
+- Voice lines remain **WIP**: the pipeline documents why custom audio needs a Wwise bank, and no runtime `AudioSource` path is recommended.
+
 # 1.2.0 — Initial WIP prerelease (2026-10-29)
 
 - Publish the first source-kit release with pinned tool setup, templates, agent guides, checksums and a build receipt. Third-party tools install locally; their binaries and game files are excluded.

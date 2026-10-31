@@ -535,7 +535,7 @@ def lookup(namespace: str, name: str, version: str | None = None) -> dict:
 
 
 def guide(topic: str = "overview") -> dict:
-    mapping = {"overview": "AGENT_GUIDE.md", "code": "RECIPES.md", "content": "RECIPES.md", "assets": "RECIPES.md", "networking": "RECIPES.md", "debugging": "RECIPES.md"}
+    mapping = {"overview": "AGENT_GUIDE.md", "code": "RECIPES.md", "content": "RECIPES.md", "assets": "RECIPES.md", "networking": "RECIPES.md", "debugging": "RECIPES.md", "character": "CHARACTER_PIPELINE.md"}
     if topic not in mapping:
         raise ValueError(f"Unknown guide topic: {topic}")
     path = ROOT / "docs" / mapping[topic]

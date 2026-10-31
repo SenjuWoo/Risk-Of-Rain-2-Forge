@@ -1,5 +1,14 @@
 # Validation history
 
+## 1.3.0 — character pipeline (2026-10-30)
+
+- `docs/CHARACTER_PIPELINE.md` records the survivor route that was executed end to end on a real character: Gnar (League of Legends) 1.0.0, 44 skins, 22 models, 51+40 clips, 265 textures, 45.9 MB Thunderstore package, built and verified on the baseline install (Steam build `25921972`, Unity `2021.3.45f2`) with no Unity editor present. Every command, type name and failure mode in that document was exercised during that build; nothing in it is copied from a tutorial.
+- Engine facts in the document were measured in-game, not inferred: `AudioSettings.outputSampleRate` and `dspTime` are `0` and the engine logs `Audio system is disabled...`; `AudioSettings.Reset(...)` leaves both at zero; `AudioClip.Create(...)` returns `samples=0, channels=0` and `AudioSource.isPlaying` stays false; `AkSoundEngine.dll` build paths report `wwise_v2023.1`. Consequently this release documents audio as WIP and the proving mod ships without it rather than with a silent path.
+- The runtime behaviour behind the body recipe was observed on the proving mod: `CharacterModel` toggles renderer visibility, `ApplySkinAsync` replaces `baseRendererInfos`, and `ViewableTag.Refresh`/`RuleChoiceController` throw at `Application.Quit` with custom content in the pregame UI while the mod's own log stays clean.
+- Route is reachable from the CLI: `forge guide character` returns the document (verified through the CLI and covered by a test). Recipes, agent guide, README, roadmap and `skills/ror2-forge/SKILL.md` link to it.
+- Full `.venv\Scripts\python.exe -m unittest discover -s tests`: **81 tests**, exit 0. The new `test_guide_topics_resolve_to_existing_docs` asserts every guide topic maps to an existing non-trivial document and that unknown topics raise.
+- Not claimed by this release: multiplayer, Wwise authoring, a second source game, or a Unity editor route. The character route is proven for one character on one source game; `docs/ROADMAP.md` lists the next character and next source game as the check that separates League-specific steps from the general ones.
+
 ## 1.2.0 WIP — tooling freshness and recovery
 
 - Initial source-kit release (2026-10-29): [v1.2.0](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/releases/tag/v1.2.0) targets green commit `93dbf201525d9089bfd498c3e9cec379f4345cab`. Two clean archives were byte-identical. Validated ZIP CRCs, source identity, version/license, exact 48-file tracked payload and exclusion of private/binary files. Exercised the extracted Windows entrypoint, doctor/guide, clean setup and the real plugin/stats build/package/inspect/bump smoke workflow. Downloaded all three published assets and verified nonzero size and SHA-256 against local builds. Evidence is in artifacts/initial-release/ and the published BUILD-RECEIPT.json/SHA256SUMS. Game/editor/runtime checks remain unperformed.

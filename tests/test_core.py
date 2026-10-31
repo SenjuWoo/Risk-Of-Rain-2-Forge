@@ -195,6 +195,18 @@ class CoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             core.logs(str(log), 5001)
 
+    def test_guide_topics_resolve_to_existing_docs(self):
+        # The character route must stay reachable through the CLI, not only by browsing docs/.
+        # setUp repoints core.ROOT at a fixture, so read the real docs explicitly.
+        with patch.object(core, "ROOT", REAL_ROOT):
+            for topic in ("overview", "code", "content", "assets", "networking", "debugging", "character"):
+                result = core.guide(topic)
+                self.assertTrue(Path(result["path"]).is_file(), topic)
+                self.assertGreater(len(result["text"]), 200, topic)
+            self.assertIn("survivor", core.guide("character")["text"].lower())
+            with self.assertRaises(ValueError):
+                core.guide("nope")
+
     def test_cli_exception_is_structured(self):
         output = io.StringIO()
         with redirect_stderr(output):

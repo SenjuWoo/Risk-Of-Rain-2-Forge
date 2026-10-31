@@ -83,6 +83,8 @@ Discovery reads Steam's registry/library manifests and r2modman data. Override i
 
 The [recipes](docs/RECIPES.md) cover items/equipment, survivors/skins/stages, hooks, asset bundles, networking and debugging. Place produced runtime bundles/audio/etc. in a mod's `content/`; packaging preserves their paths below `plugins/NAME/`. Code, extra DLLs and nested archives are refused there. The ZIP includes the mod's own DLL, manifest, README, icon, optional project LICENSE and declared content, rather than the entire build folder.
 
+Building a **playable survivor from another game's assets** has its own end-to-end route: [character pipeline](docs/CHARACTER_PIPELINE.md). It covers source extraction, mesh/rig/clip conversion, baking runtime packs, the minimum working body, skins, the verified engine facts (including why Unity audio is unavailable) and the failure modes — proven on a 44-skin character with no Unity editor.
+
 Unity authoring is optional and needs a matching editor and verified EditorKit/ThunderKit setup. Unity itself is not bundled. Read [the asset route](docs/RECIPES.md#assets-and-unity) before creating an editor project. Runtime shader, gameplay, save and multiplayer checks require actual game sessions; compilation cannot settle them.
 
 ## Optional MCP, off by default
