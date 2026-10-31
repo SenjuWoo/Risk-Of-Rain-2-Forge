@@ -207,6 +207,13 @@ class CoreTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 core.guide("nope")
 
+    def test_version_file_matches_package_version(self):
+        # VERSION is documentation; ror2forge.__version__ is what doctor and the MCP server report.
+        # They drifted during the 1.3.0 bump, so keep them locked together.
+        from ror2forge import __version__
+
+        self.assertEqual((REAL_ROOT / "VERSION").read_text(encoding="utf-8").strip(), __version__)
+
     def test_cli_exception_is_structured(self):
         output = io.StringIO()
         with redirect_stderr(output):
