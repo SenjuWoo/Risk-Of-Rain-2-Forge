@@ -416,6 +416,32 @@ def check_icon(icon: bytes) -> bool:
         return False
 
 
+
+# Thunderstore's installer keeps only these top-level routes (optionally under BepInEx/) and empties
+# every other folder into the package root. A mod that ships assets/ beside its DLL therefore installs
+# as loose files and dies on a missing path - a failure that looks fine in the ZIP and in manual
+# extraction, which is exactly how it reaches users.
+INSTALL_ROUTES = {"plugins", "patchers", "config", "core", "monomod"}
+
+
+def layout_problems(names: list[str]) -> list[str]:
+    """Folders the installer will empty, and therefore paths the installed mod can no longer open."""
+    lost: dict[str, int] = {}
+    for name in names:
+        parts = name.rstrip("/").split("/")
+        if len(parts) < 2:
+            continue
+        head = parts[0].casefold()
+        if head == "bepinex" and len(parts) > 2 and parts[1].casefold() in INSTALL_ROUTES:
+            continue
+        if head in INSTALL_ROUTES:
+            continue
+        lost[parts[0]] = lost.get(parts[0], 0) + 1
+    return [f"top-level folder '{folder}/' ({count} files) is not an install route; the manager empties it "
+            f"into the package root, so any code opening '{folder}/...' fails after install. Move it under plugins/."
+            for folder, count in sorted(lost.items())]
+
+
 def validate(archive: str | Path) -> dict:
     path = Path(archive).resolve()
     errors = []
@@ -450,6 +476,7 @@ def validate(archive: str | Path) -> dict:
             icon = package.read("icon.png")
             if not check_icon(icon):
                 errors.append("icon.png must be a 256×256 PNG")
+        errors.extend(layout_problems(names))
         if package.testzip():
             errors.append("archive CRC check failed")
     return {"valid": not errors, "archive": str(path), "sha256": sha256(path), "files": names, "errors": errors, "runtime_verified": False}

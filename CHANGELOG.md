@@ -1,3 +1,9 @@
+# 1.4.1 — Install-layout validation (2026-10-31)
+
+- `forge validate` now fails a package whose files sit in a top-level folder that is not an install route (`plugins`, `patchers`, `config`, `core`, `monomod`, optionally under `BepInEx/`). The Thunderstore manager empties those folders into the package root, so a ZIP that looks correct and unzips correctly can still install as loose files and break on a missing path. This shipped broken once in a character mod; the validator reported it valid.
+- `docs/AGENT_GUIDE.md` states the rule and warns that a successful local unzip is not install proof.
+- 4 regression tests: flat `assets/` rejected, `plugins/` route accepted, `BepInEx/plugins/` accepted, and the message names the offending folder.
+
 # 1.4.0 — Audio route (2026-10-31)
 
 - Add `docs/AUDIO.md`: the measured truth about audio in Risk of Rain 2 (Unity audio disabled, Wwise 2023.1 only), the two viable routes — a real Wwise sound bank with R2API.Sound, or an OS output stream with its spatialisation and mixer costs — and the four interop bugs that cause silence, noise bursts or a beeping exit. Includes a check-it-yourself snippet and a verification checklist that works without ears.
