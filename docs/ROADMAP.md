@@ -8,6 +8,7 @@
 - Tests plus clean-runner template compilation/package CI.
 - Bounded symbol search through ILSpy and backed-up version bumps for the edit/build/package loop (1.1.0 WIP).
 - On-demand dependency freshness reports, MCP cache recovery and game-free build diagnostics (1.2.0 WIP).
+- Verified survivor/character route without a Unity editor: source extraction → mesh/rig/clip conversion → baked runtime packs → body, skins and packaging, with engine facts and failure modes (`docs/CHARACTER_PIPELINE.md`, 1.3.0).
 
 ## Before a stable release
 
@@ -16,6 +17,7 @@
 - Validate a real matching-Unity asset authoring/import/bundle workflow.
 - Resolve or clearly scope MMHOOK's NU1701 compatibility warning with runtime evidence.
 - Exercise setup/recovery on additional clean Windows machines and follow package-feed drift.
+- Exercise the character route on a second character and a second source game to separate League-specific steps from the general ones.
 
 ## Deliberately optional
 

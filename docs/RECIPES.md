@@ -14,11 +14,15 @@ Choose only the required modules: examples include R2API.ContentManagement, Item
 
 Create definitions/prefabs and register them during the current content-provider/content-pack lifecycle before catalogs finalize. Do not append to frozen catalogs during a run. Inspect `IContentPackProvider`, `ContentManager`, and the relevant R2API module to establish the exact registration API. Pair localization tokens with definitions. Validate pickup/display rules, icon/material references, unlock conditions, logbook visibility and dropped-item behavior. Asset addresses and catalog indices are not stable identifiers to guess.
 
+A full playable **survivor** has its own route: `docs/CHARACTER_PIPELINE.md` carries the verified body recipe (clone, strip, hurtbox, camera, death state, skills, skins, `SurvivorDef`), the runtime-built-model pipeline for machines without a Unity editor, and the failure modes.
+
 Use the game’s existing shaders/material conventions and verified Addressables paths. The 1.5.0 migration changed equipment storage, projectile ghosts and some hooks, and obsoleted `CharacterBody.ItemBehavior`; inspect current replacement APIs rather than porting old snippets mechanically.
 
 ## Assets and Unity
 
 Code-only mods need no Unity editor. For AssetBundles, models, animation, audio or custom UI, discover the installed Unity editor and match the game's required editor version. The observed runtime is `2021.3.45f2`; [R2Wiki's Unity page](https://risk-of-thunder.github.io/R2Wiki/Mod-Creation/Unity-Version/) is the current upstream check. Use Built-in rendering; URP/HDRP is not a drop-in RoR2 mod pipeline.
+
+With no matching editor, a survivor's mesh, rig, clips and textures can still ship: bake them into data packs and assemble the model at runtime. That route is proven and documented in `docs/CHARACTER_PIPELINE.md`; it trades editor convenience for code you own.
 
 [RoR2EditorKit](https://github.com/risk-of-thunder/RoR2EditorKit/releases) tagged `5.7.1` was observed during research. [ThunderKit](https://risk-of-thunder.github.io/R2Wiki/Mod-Creation/ThunderKit/Crash-Course-and-Getting-Started/) and RoR2 import extensions automate the asset project/import workflow. Resolve a supported immutable release or commit against the chosen Unity editor before installing. Do not automatically import the game or configure a Unity MCP without an actual editor project and running bridge. The forge does not claim to bundle Unity or certify these optional editor imports.
 
