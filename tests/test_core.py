@@ -195,6 +195,30 @@ class CoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             core.logs(str(log), 5001)
 
+    def test_flat_asset_folder_is_rejected(self):
+        # The exact shape that shipped broken: DLL and assets/ both at the ZIP root. The manager empties
+        # assets/ into the package root, so the plugin cannot open assets/skins.json after install.
+        broken = self.archive({"GnarSurvivor.dll": b"MZ", "assets/skins.json": b"{}"})
+        result = core.validate(broken)
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("assets/" in error and "install route" in error for error in result["errors"]), result["errors"])
+
+    def test_plugins_route_preserves_nested_assets(self):
+        good = self.archive({"plugins/GnarSurvivor.dll": b"MZ", "plugins/assets/skins.json": b"{}"})
+        result = core.validate(good)
+        self.assertTrue(result["valid"], result["errors"])
+
+    def test_bepinex_prefixed_route_is_accepted(self):
+        good = self.archive({"BepInEx/plugins/Mod/Mod.dll": b"MZ"})
+        result = core.validate(good)
+        self.assertTrue(result["valid"], result["errors"])
+
+    def test_layout_problems_names_the_folder(self):
+        problems = core.layout_problems(["assets/a.json", "assets/b.json", "plugins/x.dll"])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("assets/", problems[0])
+        self.assertIn("2 files", problems[0])
+
     def test_guide_topics_resolve_to_existing_docs(self):
         # The character route must stay reachable through the CLI, not only by browsing docs/.
         # setUp repoints core.ROOT at a fixture, so read the real docs explicitly.
