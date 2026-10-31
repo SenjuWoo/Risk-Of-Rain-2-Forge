@@ -4,6 +4,7 @@
 - Record the engine facts that cost the most time, measured on the baseline build: Unity's audio subsystem is disabled and cannot be revived (`AudioClip.Create` returns an empty clip; Wwise 2023.1 only), `CharacterModel` owns renderer visibility, skin application replaces `baseRendererInfos`, and the vanilla teardown `NullReferenceException`s that look like mod errors.
 - Expose the route through the CLI as `forge guide character`; the recipes, agent guide, README, roadmap and reusable skill now route survivor work to it.
 - Add a regression test that every guide topic resolves to an existing document.
+- Align the reported version: `ror2forge.__version__` (what `doctor` and the MCP server report) is now locked to the `VERSION` file by a test, after the two drifted during the 1.3.0 bump.
 - Voice lines remain **WIP**: the pipeline documents why custom audio needs a Wwise bank, and no runtime `AudioSource` path is recommended.
 
 # 1.2.0 — Initial WIP prerelease (2026-10-29)
