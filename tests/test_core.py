@@ -249,6 +249,22 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertIn("using R2API.Skins", result["errors"][0])
 
+    def test_procedural_template_scaffolds_and_compiles_cleanly(self):
+        # The point of this template is that no Unity editor is needed to ship geometry.
+        result = core.new_mod("RockMod", "Team", template="procedural")
+        project = Path(result["project"])
+        sources = sorted(project.rglob("*.cs"))
+        self.assertTrue(sources, "template produced no C# source")
+        text = "".join(source.read_text(encoding="utf-8") for source in sources)
+        self.assertIn("IcoSphere", text)
+        self.assertIn("Mesh", text)
+        self.assertNotIn("__GUID__", text)
+        self.assertIn("PluginVersion", text)
+
+    def test_unknown_template_is_rejected(self):
+        with self.assertRaises(ValueError):
+            core.new_mod("Bad", "Team", template="nope")
+
     def test_guide_topics_resolve_to_existing_docs(self):
         # The character route must stay reachable through the CLI, not only by browsing docs/.
         # setUp repoints core.ROOT at a fixture, so read the real docs explicitly.
