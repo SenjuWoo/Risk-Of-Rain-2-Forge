@@ -1,8 +1,19 @@
+<p align="center">
+  <img src="assets/mark.svg" width="72" height="72" alt="Risk of Rain 2 Forge — WIP">
+</p>
+
+<div align="center">
+
 # Risk of Rain 2 Forge — WIP
 
-[![CI](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/workflows/ci.yml/badge.svg)](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status: WIP](https://img.shields.io/badge/status-work%20in%20progress-orange)](docs/ROADMAP.md)
+<p>
+  <a href="https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/workflows/ci.yml"><img src="https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="docs/ROADMAP.md"><img src="https://img.shields.io/badge/status-work%20in%20progress-orange" alt="Status: WIP"></a>
+  <a href="https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/releases/latest"><img src="https://img.shields.io/github/v/release/SenjuWoo/Risk-Of-Rain-2-Forge?label=release&color=2B5C93&labelColor=0d1117" alt="latest release"></a>
+</p>
+
+</div>
 
 **Work in progress.** The CLI/build/package pipeline is tested; generated mods still need in-game validation. Windows x64 is the supported development platform. Unity asset authoring is a documented optional route, not a certified editor integration.
 
