@@ -23,7 +23,7 @@ Point an agent at this folder and tell it: **“Read AGENTS.md and use this forg
 
 ## Start
 
-Download the tested [initial source-kit prerelease](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/releases/tag/v1.2.0) and extract it, or clone the repository below. The release includes SHA-256 checksums and a build receipt; it remains WIP.
+Clone the repository below, or download the [latest release](https://github.com/SenjuWoo/Risk-Of-Rain-2-Forge/releases/latest). Each release includes SHA-256 checksums and a build receipt. The project remains WIP.
 
 Install [Python 3.11+](https://www.python.org/downloads/) and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). In PowerShell:
 
@@ -60,7 +60,7 @@ A Steam copy of Risk of Rain 2 is needed for installed-assembly inspection and g
 | `validate ZIP` | Check paths, metadata, icon integrity, CRC and forbidden game references |
 | `logs [--path LOG] [--lines 250]` | Read a bounded log tail and identify triage candidates |
 | `lookup NAMESPACE NAME [--version VERSION]` | Read live Thunderstore package metadata and dependencies |
-| `guide [overview\|code\|content\|assets\|networking\|debugging]` | Read the focused agent playbook |
+| `guide [overview\|character\|runtime\|audio\|extraction\|thunderstore\|...]` | Read one playbook. `runtime` is companion aim, buffs and camera. `thunderstore` is the page and dependency minimums |
 
 ```powershell
 .\forge.cmd symbols CharacterBody --limit 10
