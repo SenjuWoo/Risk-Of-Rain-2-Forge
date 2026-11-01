@@ -1,3 +1,9 @@
+# 1.7.0 — Extracting assets from other games (2026-11-01)
+
+- Add `docs/EXTRACTION.md`: the route for pulling a character out of a UE4/UE5 game with CUE4Parse, the coordinate trap that twists a rig the moment it animates (mesh and animation exporters disagreeing), the `World * Bindpose == Identity` check that catches it before baking, and the 65k-vertex index limit.
+- Records the measured reason Wwise banks do not transfer: RoR2 ships bank version **150 (2023.1)** while the Marvel Rivals banks extracted on this machine are **145 (2022.1)**. A bank is version-locked, so "extract a bank and drop it in" cannot work; the media can. Three honest routes are written down, including the two the shipped characters use.
+- `forge guide extraction` returns it; `AGENT_GUIDE` and `AUDIO` link to it.
+
 # 1.6.0 — Procedural geometry template (2026-11-01)
 
 - `forge new NAME --template procedural`: a tested BepInEx plugin that generates geometry at runtime — a noise-displaced, flat-shaded icosphere with radius, subdivision and roughness exposed in the config. No Unity editor, no AssetBundle, no paid tool, no extractor. This is the same technique the Gnar boulder uses.
