@@ -179,3 +179,12 @@ Source-game assets (models, animations, textures, voice) belong to the source pu
 - Shaders: runtime-built materials use the game's standard shader path. Custom shaders need a bundle.
 - Performance at very high skin counts was not profiled beyond load time.
 - No Unity editor import, retargeting or AssetBundle path was validated here; that remains a separate route.
+
+## No editor, no paid tool: procedural geometry
+
+Not every asset needs an external source. `forge new MyChar --template procedural` scaffolds a tested mesh
+generator (noise-displaced icosphere with radius, subdivision and roughness in the config) built from nothing
+but the Unity API. It covers placeholders, props and simple shapes — Gnar's boulder is exactly this technique —
+and it compiles and runs without Unity, Blender or any licensed software. Reach for it before reaching for an
+extractor.
+

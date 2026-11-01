@@ -1,3 +1,9 @@
+# 1.6.0 — Procedural geometry template (2026-11-01)
+
+- `forge new NAME --template procedural`: a tested BepInEx plugin that generates geometry at runtime — a noise-displaced, flat-shaded icosphere with radius, subdivision and roughness exposed in the config. No Unity editor, no AssetBundle, no paid tool, no extractor. This is the same technique the Gnar boulder uses.
+- Verified the way it matters: the scaffold compiles cleanly through `forge build` (0 warnings) and again in CI.
+- Documented in `AGENT_GUIDE` and `CHARACTER_PIPELINE` as the first thing to try when a mod needs a shape but has no art pipeline.
+
 # 1.5.0 — Project audit (2026-10-31)
 
 - Add `forge audit <mod dir>`: cross-checks C# against the package manifest. Every `using R2API.<Module>` and every `[BepInDependency("com.bepis.r2api.<module>")]` must have a matching `RiskofThunder-R2API_<Module>` dependency, which is the silent "the plugin never loads for users" failure. It also warns when searchable/achievement attributes are used without `[assembly: HG.Reflection.SearchableAttribute.OptIn]`.

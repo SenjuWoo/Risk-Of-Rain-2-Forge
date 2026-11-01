@@ -22,7 +22,7 @@ def parser() -> argparse.ArgumentParser:
     new = commands.add_parser("new", help="Create an owned mod in projects/NAME")
     new.add_argument("name")
     new.add_argument("--author", required=True)
-    new.add_argument("--template", choices=["plugin", "stats"], default="plugin")
+    new.add_argument("--template", choices=["plugin", "stats", "procedural"], default="plugin")
     new.add_argument("--description", default="A Risk of Rain 2 mod.")
     build = commands.add_parser("build", help="Restore pinned references and compile; never deploy")
     build.add_argument("name")
