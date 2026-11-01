@@ -269,7 +269,7 @@ class CoreTests(unittest.TestCase):
         # The character route must stay reachable through the CLI, not only by browsing docs/.
         # setUp repoints core.ROOT at a fixture, so read the real docs explicitly.
         with patch.object(core, "ROOT", REAL_ROOT):
-            for topic in ("overview", "code", "content", "assets", "networking", "debugging", "character", "audio"):
+            for topic in ("overview", "code", "content", "assets", "networking", "debugging", "character", "audio", "extraction"):
                 result = core.guide(topic)
                 self.assertTrue(Path(result["path"]).is_file(), topic)
                 self.assertGreater(len(result["text"]), 200, topic)
@@ -278,6 +278,10 @@ class CoreTests(unittest.TestCase):
             audio = core.guide("audio")["text"].lower()
             self.assertIn("wwise", audio)
             self.assertIn("audioclip", audio)
+            # The extraction route has to carry the measured facts, not vibes.
+            extraction = core.guide("extraction")["text"].lower()
+            self.assertIn("bkhd", extraction)
+            self.assertIn("bindpose", extraction)
             with self.assertRaises(ValueError):
                 core.guide("nope")
 

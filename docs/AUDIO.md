@@ -120,3 +120,7 @@ capture nine seconds of nothing and conclude the pipeline is broken.
 - [ ] Stream silenced when `Time.timeScale == 0`.
 - [ ] Shutdown: stop writing → reset → join → unprepare → close.
 - [ ] Verified: position advances, peak non-zero, no noise burst on quit.
+
+## Getting audio out of another game
+
+See `docs/EXTRACTION.md`. Its banks are version-locked and will not load here — the media will.
