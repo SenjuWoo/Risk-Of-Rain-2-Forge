@@ -122,7 +122,7 @@ Blend by interpolating between keyframes with a short crossfade between clips; t
 Each of these was measured on the baseline above, not inferred.
 
 - **Unity's audio subsystem is disabled in this build.** `AudioSettings.outputSampleRate` is `0`, `AudioSettings.dspTime` is `0`, and the engine logs `Audio system is disabled, so AudioSettings.outputSampleRate cannot be queried`. `AudioSettings.Reset(...)` returns without error and changes nothing. `AudioClip.Create(...)` yields `samples=0, channels=0`, `SetData` fails and `AudioSource.isPlaying` stays false.
-- **The game is Wwise 2023.1 only** (from `AkSoundEngine.dll`'s build paths). Custom sound needs a `.bnk` authored in 2023.1 and loaded through `AkSoundEngine`. There is no runtime path from a WAV to audible game audio. Plan voice work as a Wwise task or ship silent.
+- **The game is Wwise 2023.1 only** (from `AkSoundEngine.dll`'s build paths). Spatial sound still needs a `.bnk` authored in 2023.1. A WAV can be audible without that bank: `docs/AUDIO.md` Route B writes PCM to the Windows mixer. A second character shipped that route and a player accepted the voice. `AudioSource` itself still cannot play the clip.
 - **`CharacterModel` owns renderer visibility.** It sets `renderer.enabled` from its fade/visibility factors. A runtime-built renderer that is not in `baseRendererInfos` will be toggled off even though the mesh exists.
 - **Skin application replaces `baseRendererInfos`** with the skin's (often empty) template list. Re-apply your renderer infos after `ApplySkinAsync`, or the model disappears on skin change.
 - **`ViewableTag.Refresh` / `RuleChoiceController` NullReferenceExceptions on quit are vanilla teardown noise** with custom content in the pregame UI. They appear at `Application.Quit`, do not affect gameplay, and are not caused by the mod.
@@ -140,7 +140,10 @@ Each of these was measured on the baseline above, not inferred.
 | Skin shows a recall prop / extra weapon in play | Hidden-submesh list not applied | Read the source definition (stage 3); hide by submesh name |
 | Lobby shows a different skin than the run | Display prefab has its own `skins` array | Assign the body's array to the display prefab |
 | Raw token text in the UI | Missing language token | Register every token used by definitions and skills |
-| `AudioClip.SetData failed; AudioClip contains no data` | Unity audio disabled (see above) | Remove the path, or author a Wwise bank |
+| `AudioClip.SetData failed; AudioClip contains no data` | Unity audio disabled (see above) | Do not use `AudioSource`. Use a Wwise bank, or Route B in `docs/AUDIO.md` |
+| Companion faces the wrong way, or only faces correctly for one frame | Model is detached from the body, or `Update` rotation is yawed away | `docs/RUNTIME.md`: resolve `CharacterModel.body`, aim in `LateUpdate`, point mesh +Z with `LookRotation(aim)` |
+| Camera never moves after you set the pivot | `CharacterCameraParams.data` was mutated in place | Copy the struct, edit it, assign it back. See `docs/RUNTIME.md` |
+| Flight is much faster than the tooltip | A speed buff plus a second velocity multiply, or vanilla `CloakSpeed` stacked on top | One stat-hook bonus. See `docs/RUNTIME.md` |
 
 ## Verification loop
 
@@ -167,7 +170,9 @@ What generalizes across characters, in the order it saves time:
 
 ## Audio
 
-Treat it as a separate project with its own dependency (Wwise authoring in the game's version). Decode and map the source clips while you have the archives open — Gnar's 167 clips and their event map are retained — but do not ship a runtime `AudioSource` path in this game. It cannot work, and it fails silently with a log line per cast.
+Treat spatial audio as a separate project with its own dependency (Wwise authoring in the game's version). Decode and map the source clips while you have the archives open. Do not ship a runtime `AudioSource` path. It cannot work, and it fails silently with a log line per cast. Voice that does not need position can use the OS mixer in `docs/AUDIO.md`. The played second character did.
+
+Companion aim, the detached model, camera struct copies, timed buffs and what counts as a passing run are in `docs/RUNTIME.md` (`forge guide runtime`).
 
 ## Licensing and publication
 

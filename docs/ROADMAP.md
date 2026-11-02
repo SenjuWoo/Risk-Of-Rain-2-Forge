@@ -17,7 +17,7 @@
 - Validate a real matching-Unity asset authoring/import/bundle workflow.
 - Resolve or clearly scope MMHOOK's NU1701 compatibility warning with runtime evidence.
 - Exercise setup/recovery on additional clean Windows machines and follow package-feed drift.
-- Exercise the character route on a second character and a second source game to separate League-specific steps from the general ones.
+- Second character done (2026-11-01): Ultron, from a different source game, was played and accepted. The facts that were not League-specific are in `docs/RUNTIME.md` and `docs/THUNDERSTORE.md`. Host/client proof for that survivor is still open.
 
 ## Deliberately optional
 

@@ -1,7 +1,7 @@
 # Workspace ownership
 
 - Project root: `.` (this file's directory; one owner shared by every agent).
-- Active source: `.`; original forge modules in ror2forge/, templates/, docs/, tests/ and launchers. Version 1.2.0 WIP in VERSION; protected main is updated through verified pull requests.
+- Active source: `.`; original forge modules in ror2forge/, templates/, docs/, tests/ and launchers. Version 1.8.0 WIP in VERSION; protected main is updated through verified pull requests.
 - Versioning: semantic versions in VERSION/CHANGELOG.md; source remains in this root. Preserve known-good artifacts and receipts rather than duplicating source snapshots.
 - Repository: SenjuWoo/Risk-Of-Rain-2-Forge, public MIT WIP source; explicitly authorized by user on 2026-10-27.
 - Publication intent: public source and initial WIP source-kit prerelease explicitly authorized on 2026-10-29. Release v1.2.0 retains external tool setup; no stable binary release is requested. Keep generated mods, game files, tool binaries/caches and private evidence local.

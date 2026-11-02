@@ -1,3 +1,11 @@
+# 1.8.0 — Survivor runtime and the Thunderstore page (2026-11-01)
+
+- Add `docs/RUNTIME.md`: lessons from the second played survivor. The live model is detached, so `GetComponentInParent` and `IsChildOf` miss the body. Companion aim belongs in `LateUpdate` and mesh +Z uses `LookRotation(aim)`, not the negated aim. `CharacterCameraParams.data` is a struct. A timed buff uses one stat-hook field (`moveSpeedMultAdd` or `armorAdd`) and must not stack vanilla `CloakSpeed`, vanilla `ArmorBoost`, or a second velocity multiply. Heal stays on the server.
+- `docs/AUDIO.md` records that both shipped characters play 48 kHz stereo 16-bit PCM, and that the second character shipped the OS mixer without the game volume slider or pause-on-timescale. The player accepted that voice. The four mixer bugs are unchanged.
+- `docs/CHARACTER_PIPELINE.md` no longer says a WAV cannot be heard. `AudioSource` still cannot. Route B can.
+- Add `docs/THUNDERSTORE.md`: the zip rules `validate` already enforces, plus the page rules it cannot see. Dependency versions are minimums, the README in the zip is the page, gallery images are a separate upload, and an uploaded version cannot be edited. Records the R2API and BepInEx minimums that were active on 2026-11-01. The `forge new` pins are unchanged.
+- `forge guide runtime` and `forge guide thunderstore` return the new docs.
+
 # 1.7.0 — Extracting assets from other games (2026-11-01)
 
 - Add `docs/EXTRACTION.md`: the route for pulling a character out of a UE4/UE5 game with CUE4Parse, the coordinate trap that twists a rig the moment it animates (mesh and animation exporters disagreeing), the `World * Bindpose == Identity` check that catches it before baking, and the 65k-vertex index limit.

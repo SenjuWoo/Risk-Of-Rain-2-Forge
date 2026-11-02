@@ -83,6 +83,10 @@ dependency and no account.
 Use Route B for a character's own voice lines (non-positional is arguably *correct* for your own voice).
 Think hard before using it for world sounds.
 
+The mixer used by both shipped characters plays **48 kHz, stereo, 16-bit PCM**. Convert anything else before it reaches `waveOut`. Log the first device or write failure once; a swallowed error looks like a silent mod.
+
+A second character (Ultron, accepted in a played run on 2026-11-01) shipped Route B for skill voice and effects. That build did not read `volume_sfx` and did not silence the stream when `Time.timeScale == 0`. The player accepted it for that character's voice. Those two costs are still real: apply them when the sound should follow the game's slider and pause with the game. The four bugs below still apply either way.
+
 ### Four bugs that will cost you an afternoon
 
 These are real, from the Gnar implementation:
