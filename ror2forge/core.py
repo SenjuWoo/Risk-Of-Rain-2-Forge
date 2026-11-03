@@ -491,6 +491,9 @@ def validate(archive: str | Path) -> dict:
 # what the C# actually references against what the package declares.
 
 R2API_GUID_PREFIX = "com.bepis.r2api."
+# Namespaces that ship inside R2API.Core.dll rather than a split module of the same name (read from
+# R2API_Core 5.3.0); `using R2API.Utils;` for NetworkCompatibility needs R2API_Core, not an "R2API_Utils".
+R2API_CORE_NAMESPACES = {"Utils": "Core", "MiscHelpers": "Core", "AutoVersionGen": "Core"}
 
 
 def _norm(name: str) -> str:
@@ -543,7 +546,8 @@ def audit_project(root: str | Path) -> dict:
 
     # 1. every R2API namespace used needs its own split module in the manifest
     for module in sorted(imports):
-        if _norm(module) not in declared:
+        owner = R2API_CORE_NAMESPACES.get(module, module)
+        if _norm(owner) not in declared:
             errors.append(f"using R2API.{module}; but no RiskofThunder-R2API_{module} dependency in {manifest_path.name}")
 
     # 2. every BepInDependency GUID should correspond to a declared package
@@ -582,10 +586,40 @@ def audit_project(root: str | Path) -> dict:
         if version and literal != version:
             errors.append(f'C# version constant "{literal}" != manifest version_number {version}')
 
+    # 6-9. survivor polish that compiles, validates and plays, so nothing else catches it (Ultron 1.1.2/1.2.0 audit)
+    warnings.extend(survivor_warnings(joined))
+
     return {"root": str(root), "manifest": str(manifest_path), "sources": len(sources),
             "r2api_modules": sorted(imports), "dependency_guids": sorted(guids),
             "dependencies_declared": len(declared_full), "errors": errors, "warnings": warnings,
             "valid": not errors}
+
+
+_ATTACK = re.compile(r"\bnew\s+(?:BulletAttack|BlastAttack|OverlapAttack)\b")
+_DAMAGE_TYPE = re.compile(r"\bdamageType\s*=\s*([^;,\n(]+(?:\([^)]*\))?)")
+
+
+def survivor_warnings(source: str) -> list[str]:
+    """Warnings for survivor gaps that play fine in a solo test; each one names the fix in docs/RUNTIME.md."""
+    warnings = []
+    if re.search(r"\bAddSurvivorDef\b|ScriptableObject\.CreateInstance<SurvivorDef>", source) and "itemDisplayRuleSet" not in source:
+        warnings.append("registers a survivor but never sets CharacterModel.itemDisplayRuleSet, so picked-up items are "
+                        "invisible on the model (docs/RUNTIME.md, 'Item displays')")
+    if _ATTACK.search(source):
+        untagged = sorted({m.group(1).strip().rstrip(",") for m in _DAMAGE_TYPE.finditer(source)
+                           if "DamageType." in m.group(1) and "DamageSource" not in m.group(1)
+                           and not re.search(r"Generic(Primary|Secondary|Utility|Special)", m.group(1))})
+        if untagged:
+            warnings.append("attack damageType without a DamageSource (" + "; ".join(untagged[:4]) + "): skill-keyed items "
+                            "ignore these hits. Use new DamageTypeCombo(type, DamageTypeExtended.Generic, DamageSource.Primary|...) "
+                            "(docs/RUNTIME.md, 'Damage source')")
+    if "waveOutWrite" in source and not re.search(r"cvVolumeSfx|volume_sfx", source):
+        warnings.append("plays through waveOut but never reads the game's SFX volume; the in-game slider does nothing "
+                        "(docs/AUDIO.md, Route B)")
+    if re.search(r"LoadImage\s*\([^;]*,\s*false\s*\)", source):
+        warnings.append("ImageConversion.LoadImage(..., false) keeps a CPU copy of every texture; pass true unless the "
+                        "pixels are read back (docs/RUNTIME.md, 'Texture memory')")
+    return warnings
 
 
 def plugin_version_declaration(source: str) -> re.Match:

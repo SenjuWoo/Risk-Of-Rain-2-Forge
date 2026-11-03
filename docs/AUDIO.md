@@ -85,7 +85,23 @@ Think hard before using it for world sounds.
 
 The mixer used by both shipped characters plays **48 kHz, stereo, 16-bit PCM**. Convert anything else before it reaches `waveOut`. Log the first device or write failure once; a swallowed error looks like a silent mod.
 
-A second character (Ultron, accepted in a played run on 2026-11-01) shipped Route B for skill voice and effects. That build did not read `volume_sfx` and did not silence the stream when `Time.timeScale == 0`. The player accepted it for that character's voice. Those two costs are still real: apply them when the sound should follow the game's slider and pause with the game. The four bugs below still apply either way.
+A second character (Ultron) shipped Route B for skill voice and effects. Its 1.0–1.1 builds ignored the volume slider and played every Ultron in the lobby at full level in every ear. 1.1.2 fixed both in about forty lines, so start there:
+
+```csharp
+// Wwise owns the sliders; WinMM bypasses Wwise, so apply them yourself. GetString() returns "0".."100".
+static float Slider(RoR2.ConVar.BaseConVar cv) =>
+    cv != null && float.TryParse(cv.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v)
+        ? Mathf.Clamp01(v / 100f) : 1f;
+float gain = volume * Slider(AudioManager.cvVolumeMaster) * Slider(AudioManager.cvVolumeSfx);
+
+// No spatialisation: fall off by distance to the nearest scene camera (full inside 12 m, silent past 80 m).
+float best = float.MaxValue;
+foreach (var rig in CameraRigController.readOnlyInstancesList)
+    if (rig && rig.sceneCam) best = Mathf.Min(best, Vector3.Distance(rig.sceneCam.transform.position, at));
+if (best < float.MaxValue) gain *= 1f - Mathf.Clamp01((best - 12f) / 68f);
+```
+
+`AudioManager.cvVolumeMaster` and `cvVolumeSfx` are static `VolumeConVar`s (checked in the 2026-11 `RoR2.dll`). Pass a world position for skill and impact sounds and none for lobby or UI sounds. Scale samples straight into the unmanaged `lpData` buffer (an `unsafe` loop) instead of allocating a scaled `short[]` per shot; a 1 MB voice line was 1 MB of garbage every play. Pause-on-timescale is still not done there. The bugs below apply either way.
 
 ### Five bugs that will cost you an afternoon
 
@@ -126,7 +142,7 @@ capture nine seconds of nothing and conclude the pipeline is broken.
 - [ ] Confirm the engine state first (`outputSampleRate`, `AudioClip.Create`). Do not guess.
 - [ ] Decided Route A or Route B, and wrote down the trade-off in the README.
 - [ ] Clips are 16-bit PCM WAV at a known sample rate; mono keeps the mixer trivial.
-- [ ] Volume exposed in config, and the game's `volume_sfx` read where possible.
+- [ ] Gain multiplied by `AudioManager.cvVolumeMaster` x `cvVolumeSfx`, and world sounds attenuated by camera distance (`forge audit` warns when `waveOutWrite` appears without them).
 - [ ] Stream silenced when `Time.timeScale == 0`.
 - [ ] Shutdown: clear flag → join mixer thread → reset → unprepare → free → close.
 - [ ] `forge audit` passes: every played event exists in `events.txt`.
