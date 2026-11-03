@@ -1,3 +1,10 @@
+# 1.11.0 — Survivor checklist (2026-11-03)
+
+- New `docs/SURVIVOR_CHECKLIST.md`, also `forge guide checklist`: twelve defaults of a survivor (item displays, damage source, authority, clone leftovers, audio volume and distance, texture memory, package layout, R2API names, live model, buffs, costumes, tooltips) and a definition of done. Written so a weaker model reads one page and cannot skip the items that compile, validate and play solo. The agent guide, skill and `AGENTS.md` send survivor work there first.
+- `docs/CHARACTER_PIPELINE.md` failure modes gained five rows: invisible items, skill items ignoring hits, T-pose after a costume swap, invented or clamped costumes, and sound that ignores the slider.
+- `docs/RUNTIME.md` records Gnar's reuse of the item display recipe (own bone map, build factor 0.9, rebuild on every form swap).
+- 1 regression test.
+
 # 1.10.1 — Audit accepts Compress then Apply(false, true) (2026-11-03)
 
 - The `LoadImage(..., false)` warning no longer fires when the source also calls `Apply(..., true)`. `Compress()` needs readable pixels and `Apply(false, true)` frees the CPU copy, so Gnar's DXT path is correct; passing `true` would make `Compress` throw and ship 4x the VRAM. Reported by the Gnar session, checked against `GnarAssets.cs`.

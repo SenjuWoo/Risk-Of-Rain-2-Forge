@@ -266,6 +266,12 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(len(result["errors"]), 1)
         self.assertIn('"1.0.1"', result["errors"][0])
 
+    def test_checklist_guide_names_every_audited_row(self):
+        with patch.object(core, "ROOT", REAL_ROOT):
+            text = core.guide("checklist")["text"]
+        for needle in ("itemDisplayRuleSet", "DamageSource", "cvVolumeSfx", "Apply(false, true)", "R2API_Core", "Done means"):
+            self.assertIn(needle, text)
+
     def test_survivor_warnings_flag_runtime_polish_gaps(self):
         source = """
         var s = ScriptableObject.CreateInstance<SurvivorDef>(); ContentAddition.AddSurvivorDef(s);
@@ -330,7 +336,7 @@ class CoreTests(unittest.TestCase):
         # The character route must stay reachable through the CLI, not only by browsing docs/.
         # setUp repoints core.ROOT at a fixture, so read the real docs explicitly.
         with patch.object(core, "ROOT", REAL_ROOT):
-            for topic in ("overview", "code", "content", "assets", "networking", "debugging", "character", "audio", "extraction", "runtime", "thunderstore"):
+            for topic in ("overview", "code", "content", "assets", "networking", "debugging", "character", "audio", "extraction", "runtime", "thunderstore", "checklist"):
                 result = core.guide(topic)
                 self.assertTrue(Path(result["path"]).is_file(), topic)
                 self.assertGreater(len(result["text"]), 200, topic)

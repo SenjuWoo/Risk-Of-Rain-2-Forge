@@ -146,6 +146,11 @@ Each of these was measured on the baseline above, not inferred.
 | Tooltip/README says one number, the skill deals another | A rebalance changed a coefficient but not the language token or the README | Change coefficient, token and README in the same commit; grep the old number before release |
 | A %-max-health effect deletes bosses | A League/MOBA number copied as-is; RoR2 boss and elite pools are far larger | Cap the %-health part at a multiple of the attacker's damage (Gnar caps Hyper at 6x) |
 | Manifest, csproj and plugin constant disagree on the version | Three hand-edited version fields | `forge bump` for Forge projects; `forge audit` now fails the drift in any project |
+| Picked-up items are invisible on the model | No `itemDisplayRuleSet` | `docs/RUNTIME.md`, Item displays. `forge audit` warns |
+| Items that boost skill damage do nothing for your skills | Attacks carry `DamageSource.NoneSpecified` | Tag every attack with a `DamageTypeCombo`. `forge audit` warns |
+| Switching costume freezes the pose (T-pose, stretched textures) | Animation driver kept a bone name -> index map from a larger skeleton and threw every frame | Clear per-skeleton state when the mesh changes and clamp the write loop to the new arrays |
+| Only some costumes work, or names and icons are invented | A hand-typed skin list or a clamp on the skin index | Generate the skin table from the game's material files; no clamp |
+| Sound ignores the in-game slider or plays full volume across the map | winmm bypasses Wwise | Multiply gain by `cvVolumeMaster` x `cvVolumeSfx` and fall off by camera distance. `docs/AUDIO.md` |
 | Flight is much faster than the tooltip | A speed buff plus a second velocity multiply, or vanilla `CloakSpeed` stacked on top | One stat-hook bonus. See `docs/RUNTIME.md` |
 
 ## Verification loop

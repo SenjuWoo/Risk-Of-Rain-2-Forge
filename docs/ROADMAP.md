@@ -10,6 +10,8 @@
 - On-demand dependency freshness reports, MCP cache recovery and game-free build diagnostics (1.2.0 WIP).
 - Verified survivor/character route without a Unity editor: source extraction → mesh/rig/clip conversion → baked runtime packs → body, skins and packaging, with engine facts and failure modes (`docs/CHARACTER_PIPELINE.md`, 1.3.0).
 
+- Survivor checklist (1.11.0): `docs/SURVIVOR_CHECKLIST.md` collects the twelve defaults and the definition of done, and `forge audit` warns on the ones it can see (1.10.0).
+
 ## Before a stable release
 
 - Record repeatable BepInEx loader/gameplay checks against a named game build.

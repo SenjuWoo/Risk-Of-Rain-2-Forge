@@ -80,6 +80,8 @@ A survivor whose `CharacterModel.itemDisplayRuleSet` is null shows no items at a
 3. After your rig is built and still in its rest pose, add an adapter `GameObject` under the matching bone of your skeleton (UE5 mannequin: `Chest`→`spine_04`, `Stomach`→`spine_02`, limbs by side, unknown names→chest). Set the adapter's world rotation to `modelRoot.rotation * commandoRelativeRotation` and its scale to `commandoScale * ratio / bone.lossyScale`, where `ratio` is your head height over Commando's (1.56 m). Register the adapters in your `ChildLocator` under Commando's names.
 4. Commando's offsets then land on the same body part. A slim survivor needs a build factor below 1 on `ratio`; pure height scaling left Ultron's hoof and glasses oversized and floating (0.75 fixed it).
 
+Gnar (League rig, two forms) reused this with its own bone map and a build factor of 0.9, and rebuilds the anchors on every rig build and on every Mini/Mega swap. A survivor with several forms or models needs the rebuild on each; the bone map and build factor are the only per-character parts.
+
 If your rig pins bone 0 to identity in its animator, pin it before measuring the rest pose.
 
 Displays attach to transforms of the current rig. When a costume swap or a late `Start` rebuilds the rig, the old displays die with it, and any display requested before the rig existed never spawned. After every rig build call `DisableAllItemDisplays()`, clear the equipment and key-item displays, then `UpdateItemDisplay(body.inventory)` and restore them. Skip all of it while `body.inventory` is null: `CharacterModel.SetEquipmentDisplay` with an unchanged index dereferences `body.inventory` and throws on a fresh body.
