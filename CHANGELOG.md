@@ -1,3 +1,8 @@
+# 1.10.1 — Audit accepts Compress then Apply(false, true) (2026-11-03)
+
+- The `LoadImage(..., false)` warning no longer fires when the source also calls `Apply(..., true)`. `Compress()` needs readable pixels and `Apply(false, true)` frees the CPU copy, so Gnar's DXT path is correct; passing `true` would make `Compress` throw and ship 4x the VRAM. Reported by the Gnar session, checked against `GnarAssets.cs`.
+- 1 regression test.
+
 # 1.10.0 — Survivor polish: item displays, damage source, audio volume (2026-11-03)
 
 - `forge audit` warns (does not fail) on four survivor gaps that compile, validate and play solo: a registered survivor with no `itemDisplayRuleSet`, a `BulletAttack`/`BlastAttack`/`OverlapAttack` whose `damageType` is a literal `DamageType.` with no `DamageSource`, `waveOutWrite` without `AudioManager.cvVolumeSfx`, and `ImageConversion.LoadImage(..., false)`.

@@ -92,7 +92,7 @@ Cloning `CommandoBody` keeps its `SfxLocator`. Clear `deathSound` and `barkSound
 
 ## Texture memory
 
-`ImageConversion.LoadImage(tex, bytes, false)` keeps a readable CPU copy of every texture beside the GPU one. A survivor with ~130 512² costume textures paid ~180 MB of RAM for nothing. Pass `true` unless code reads the pixels back; `Sprite.Create` does not need a readable texture.
+`ImageConversion.LoadImage(tex, bytes, false)` keeps a readable CPU copy of every texture beside the GPU one. A survivor with ~130 512² costume textures paid ~180 MB of RAM for nothing. Pass `true` unless code reads the pixels back or compresses them: `LoadImage(..., false)` then `Compress(true)` then `Apply(false, true)` is correct (DXT cuts VRAM ~4x and the last call frees the CPU copy; `forge audit` accepts that pair).  `Sprite.Create` does not need a readable texture.
 
 Check the bake output for byte-identical duplicates (a fallback `model.gz` that equals the default costume's) and maps the material builder drops (`_M`, `_S` masks). Keep them in the source tree; leave them out of the package.
 

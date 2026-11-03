@@ -299,6 +299,11 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(len(warnings), 1)
         self.assertIn("(DamageType.Generic)", warnings[0])
 
+    def test_survivor_warnings_accept_compress_then_free(self):
+        # Gnar: LoadImage(false) -> Compress() -> Apply(false, true) is the right way to cut VRAM 4x and free RAM.
+        source = "ImageConversion.LoadImage(t, b, false); t.Compress(true); t.Apply(false, true);"
+        self.assertEqual(core.survivor_warnings(source), [])
+
     def test_audit_surfaces_survivor_warnings_without_failing(self):
         mod = self._audit_mod([], 'class P { void A() { ContentAddition.AddSurvivorDef(s); } }')
         result = core.audit_project(mod)

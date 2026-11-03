@@ -1,6 +1,6 @@
 # Risk of Rain 2 Forge — verified handoff
 
-- Version: **1.10.0** (audit: survivor polish warnings + R2API.Core namespace fix; Ultron 1.1.2/1.2.0 lessons in RUNTIME/AUDIO). Owner/source is this root (WORKSPACE_OWNERSHIP.md). Repository: SenjuWoo/Risk-Of-Rain-2-Forge, public MIT. Older bullets below keep the version they were written under.
+- Version: **1.10.1** (audit: survivor polish warnings; Compress+Apply(false,true) accepted + R2API.Core namespace fix; Ultron 1.1.2/1.2.0 lessons in RUNTIME/AUDIO). Owner/source is this root (WORKSPACE_OWNERSHIP.md). Repository: SenjuWoo/Risk-Of-Rain-2-Forge, public MIT. Older bullets below keep the version they were written under.
 - Goal: give any agent current tools, exact API inspection, tested templates and an efficient modding playbook.
 - User preference: CLI by default. MCP is optional, unregistered globally and never auto-started. No personal agent config/model choices changed.
 - Entry: `forge.cmd doctor`, `forge.cmd guide`, `AGENTS.md`. Source modules in ror2forge/, templates in templates/, reusable skill in skills/ror2-forge/.
