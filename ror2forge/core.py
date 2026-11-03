@@ -560,6 +560,28 @@ def audit_project(root: str | Path) -> dict:
     if "SearchableAttribute.OptIn" not in joined and re.search(r"\[RegisterAchievement|\[Searchable", joined):
         warnings.append("uses searchable/achievement attributes but no [assembly: HG.Reflection.SearchableAttribute.OptIn]")
 
+    # 4. every audio event a source file plays must exist in the shipped event map, or it is silently silent
+    # (a transform voice line pointed at a League event that was never extracted, and nothing errored)
+    events_files = [p for p in root.rglob("events.txt") if not {"bin", "obj"} & {x.lower() for x in p.parts}]
+    if events_files:
+        keys = set()
+        for path in events_files:
+            for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+                if "=" in line and not line.lstrip().startswith("#"):
+                    keys.add(line.split("=", 1)[0].strip())
+        for ev in sorted(set(re.findall(r'"(Play_[A-Za-z0-9_]+)"', joined)) - keys):
+            errors.append(f'"{ev}" is played in C# but missing from {events_files[0].name}')
+
+    # 5. the manifest, csproj and plugin attribute must carry one version (three places drift apart by hand)
+    version = manifest.get("version_number")
+    for csproj in [p for p in root.rglob("*.csproj") if not {"bin", "obj"} & {x.lower() for x in p.parts}]:
+        found = ET.parse(csproj).findtext(".//Version")
+        if found and version and found != version:
+            errors.append(f"{csproj.name} <Version> {found} != manifest version_number {version}")
+    for literal in set(re.findall(r'\bconst\s+string\s+\w*Version\s*=\s*"(\d+\.\d+\.\d+)"', joined)):
+        if version and literal != version:
+            errors.append(f'C# version constant "{literal}" != manifest version_number {version}')
+
     return {"root": str(root), "manifest": str(manifest_path), "sources": len(sources),
             "r2api_modules": sorted(imports), "dependency_guids": sorted(guids),
             "dependencies_declared": len(declared_full), "errors": errors, "warnings": warnings,

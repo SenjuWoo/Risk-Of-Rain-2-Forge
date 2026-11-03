@@ -249,6 +249,23 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertIn("using R2API.Skins", result["errors"][0])
 
+    def test_audit_rejects_audio_event_missing_from_map(self):
+        mod = self._audit_mod([], 'class P { void A() { Play("Play_vo_Real"); Play("Play_vo_Missing"); } }')
+        (mod / "package" / "assets").mkdir(parents=True, exist_ok=True)
+        (mod / "package" / "assets" / "events.txt").write_text("# key=files\nPlay_vo_Real=1.wav\n", encoding="utf-8")
+        result = core.audit_project(mod)
+        self.assertFalse(result["valid"])
+        self.assertEqual(len(result["errors"]), 1)
+        self.assertIn("Play_vo_Missing", result["errors"][0])
+
+    def test_audit_rejects_version_drift(self):
+        mod = self._audit_mod([], 'class P { public const string Version = "1.0.1"; }')
+        (mod / "src" / "Mod.csproj").write_text("<Project><PropertyGroup><Version>1.0.0</Version></PropertyGroup></Project>", encoding="utf-8")
+        result = core.audit_project(mod)
+        self.assertFalse(result["valid"])
+        self.assertEqual(len(result["errors"]), 1)
+        self.assertIn('"1.0.1"', result["errors"][0])
+
     def test_procedural_template_scaffolds_and_compiles_cleanly(self):
         # The point of this template is that no Unity editor is needed to ship geometry.
         result = core.new_mod("RockMod", "Team", template="procedural")

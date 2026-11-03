@@ -143,6 +143,9 @@ Each of these was measured on the baseline above, not inferred.
 | `AudioClip.SetData failed; AudioClip contains no data` | Unity audio disabled (see above) | Do not use `AudioSource`. Use a Wwise bank, or Route B in `docs/AUDIO.md` |
 | Companion faces the wrong way, or only faces correctly for one frame | Model is detached from the body, or `Update` rotation is yawed away | `docs/RUNTIME.md`: resolve `CharacterModel.body`, aim in `LateUpdate`, point mesh +Z with `LookRotation(aim)` |
 | Camera never moves after you set the pivot | `CharacterCameraParams.data` was mutated in place | Copy the struct, edit it, assign it back. See `docs/RUNTIME.md` |
+| Tooltip/README says one number, the skill deals another | A rebalance changed a coefficient but not the language token or the README | Change coefficient, token and README in the same commit; grep the old number before release |
+| A %-max-health effect deletes bosses | A League/MOBA number copied as-is; RoR2 boss and elite pools are far larger | Cap the %-health part at a multiple of the attacker's damage (Gnar caps Hyper at 6x) |
+| Manifest, csproj and plugin constant disagree on the version | Three hand-edited version fields | `forge bump` for Forge projects; `forge audit` now fails the drift in any project |
 | Flight is much faster than the tooltip | A speed buff plus a second velocity multiply, or vanilla `CloakSpeed` stacked on top | One stat-hook bonus. See `docs/RUNTIME.md` |
 
 ## Verification loop
@@ -154,6 +157,7 @@ A build is not gameplay proof. The cheapest reliable loop that produced the Gnar
 3. **Autorun harness** (compiled only into Debug builds) starts a run as the survivor and executes a text script: `wait`, `cast <slot>`, `skin <n>`, `mega`, `kill`, `walk`, `zoom`, `shot <name>`, `quit`.
 4. **Screenshots per state** — spawn, each skill mid-flight, run cycle, form swap, death, lobby. Review the frames; a green log proves nothing about a black model.
 5. **Log greps** for your own tag and for `Exception`, with the known vanilla noise filtered.
+6. **Know what the harness touches.** The game save is per Steam user, not per BepInEx folder: dev runs add run stats, and a scripted loadout or skin change persists into the player's real profile. Reset anything you changed (Gnar's lobby sweep ends by selecting skin 0 again) and say so in the handoff.
 
 Then repeat once against the **Release** package extracted from the ZIP: it proves the shipped bytes load, not just the debug build.
 
