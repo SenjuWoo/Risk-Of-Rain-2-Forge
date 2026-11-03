@@ -1,3 +1,12 @@
+# 1.9.0 — Audit catches silent audio and version drift (2026-11-03)
+
+- `forge audit` fails every `"Play_..."` string in C# that is not a key in a shipped `events.txt`. A missing key plays nothing and throws nothing; Gnar's transform voice was silent for a release because of it.
+- `forge audit` fails version drift between `manifest.json` `version_number`, any `.csproj` `<Version>` and any C# `const string ...Version`.
+- `docs/AUDIO.md`: the shutdown order was wrong. Join the mixer thread before `waveOutReset`, or a buffer queued after the reset is freed while the device owns it. Five bugs now, with the event-map one added.
+- `docs/CHARACTER_PIPELINE.md`: tooltip/README numbers drifting after a rebalance, %-max-health effects that need a cap against RoR2 boss pools, version-field drift, and the fact that dev runs write to the player's real Steam save.
+- `docs/THUNDERSTORE.md`: ask the live API before calling a version unpublished.
+- 2 regression tests (missing event key, version drift).
+
 # 1.8.0 — Survivor runtime and the Thunderstore page (2026-11-01)
 
 - Add `docs/RUNTIME.md`: lessons from the second played survivor. The live model is detached, so `GetComponentInParent` and `IsChildOf` miss the body. Companion aim belongs in `LateUpdate` and mesh +Z uses `LookRotation(aim)`, not the negated aim. `CharacterCameraParams.data` is a struct. A timed buff uses one stat-hook field (`moveSpeedMultAdd` or `armorAdd`) and must not stack vanilla `CloakSpeed`, vanilla `ArmorBoost`, or a second velocity multiply. Heal stays on the server.

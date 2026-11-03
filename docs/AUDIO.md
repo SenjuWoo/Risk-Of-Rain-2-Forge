@@ -87,7 +87,7 @@ The mixer used by both shipped characters plays **48 kHz, stereo, 16-bit PCM**. 
 
 A second character (Ultron, accepted in a played run on 2026-11-01) shipped Route B for skill voice and effects. That build did not read `volume_sfx` and did not silence the stream when `Time.timeScale == 0`. The player accepted it for that character's voice. Those two costs are still real: apply them when the sound should follow the game's slider and pause with the game. The four bugs below still apply either way.
 
-### Four bugs that will cost you an afternoon
+### Five bugs that will cost you an afternoon
 
 These are real, from the Gnar implementation:
 
@@ -98,9 +98,15 @@ These are real, from the Gnar implementation:
    **uninitialised heap memory**: a loud, high-pitched, snare-like noise. This is the single most likely
    cause of "my mod makes a horrible noise".
 3. **`waveOutReset` before `waveOutClose`.** Closing with buffers still queued leaves the driver replaying
-   the last block — the "beep beep beep" on exit. Reset first, then join your mixer thread, then close.
-4. **Stop writing before you reset.** If the mixer thread keeps calling `waveOutWrite` during shutdown it
-   re-queues buffers behind the reset and the noise comes back.
+   the last block — the "beep beep beep" on exit.
+4. **Join the mixer thread before you reset.** Clearing a `_running` flag does not stop a thread that is
+   already inside `Write`: it queues one more buffer *after* `waveOutReset`, then you unprepare and
+   `FreeHGlobal` memory the device still owns. Order: clear the flag → join the thread → reset →
+   unprepare → free → close. (Gnar 1.3.0 had reset before join; fixed in 1.3.1.)
+5. **An event key that is not in the map is silent.** Nothing throws when `Play("Play_vo_X")` misses the
+   event map, so a typo or an event the source game never had just plays nothing. Gnar's transform voice
+   did this for a release. `forge audit` now fails every `"Play_..."` literal that is not a key in the
+   shipped `events.txt`.
 
 ### Verifying it without ears
 
@@ -122,7 +128,8 @@ capture nine seconds of nothing and conclude the pipeline is broken.
 - [ ] Clips are 16-bit PCM WAV at a known sample rate; mono keeps the mixer trivial.
 - [ ] Volume exposed in config, and the game's `volume_sfx` read where possible.
 - [ ] Stream silenced when `Time.timeScale == 0`.
-- [ ] Shutdown: stop writing → reset → join → unprepare → close.
+- [ ] Shutdown: clear flag → join mixer thread → reset → unprepare → free → close.
+- [ ] `forge audit` passes: every played event exists in `events.txt`.
 - [ ] Verified: position advances, peak non-zero, no noise burst on quit.
 
 ## Getting audio out of another game
