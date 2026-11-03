@@ -56,6 +56,46 @@ Beam and ring visuals that should track the crosshair belong in `Update`. Damage
 
 Healing and barrier run only when `NetworkServer.active`. The pulse and the sound run on every client. A client-side heal desyncs the body.
 
+## Authority for motor writes
+
+A body controller that sets `CharacterMotor.velocity` or calls `Motor.ForceUnground()` (flight, hover, dash) must gate it on `body.hasEffectiveAuthority`. Only the owning client simulates that motor; on the host and other clients the writes are discarded at best and fight the network transform at worst. Entity states run on every client, so buffs still go on the server (`NetworkServer.active`) and visuals still run everywhere.
+
+## Damage source
+
+Since Seekers of the Storm, `BulletAttack.damageType` and `BlastAttack.damageType` are `DamageTypeCombo`, and items that key off "primary/secondary/utility/special skill damage" read its `damageSource`. A plain enum converts implicitly and compiles, but carries `DamageSource.NoneSpecified`, so those items ignore the hit. Tag every skill attack:
+
+```csharp
+damageType = new DamageTypeCombo(DamageType.IgniteOnHit, DamageTypeExtended.Generic, DamageSource.Primary),
+// or, with no extra flags: DamageTypeCombo.GenericSecondary
+```
+
+Do not write `DamageTypeCombo.GenericPrimary | DamageType.X`: the implicit conversions make the operator ambiguous. `forge audit` warns on a literal `DamageType.` value with no source.
+
+## Item displays
+
+A survivor whose `CharacterModel.itemDisplayRuleSet` is null shows no items at all. Hand-placing a rule per item is hundreds of rules. The route that works without an editor (Ultron 1.2.0, every costume):
+
+1. Before cloning, read Commando's `CharacterModel.itemDisplayRuleSet` and `ChildLocator` from the original `CommandoBody` prefab. Share the rule set as-is; it is already catalogued, so no clone and no `GenerateRuntimeValues` call.
+2. For each Commando child name (32 on the 2026-11 build: `Chest`, `Head`, `ThighL`, `CalfR`, `GunL`, ...), record its rotation relative to the model root and its lossy scale.
+3. After your rig is built and still in its rest pose, add an adapter `GameObject` under the matching bone of your skeleton (UE5 mannequin: `Chest`→`spine_04`, `Stomach`→`spine_02`, limbs by side, unknown names→chest). Set the adapter's world rotation to `modelRoot.rotation * commandoRelativeRotation` and its scale to `commandoScale * ratio / bone.lossyScale`, where `ratio` is your head height over Commando's (1.56 m). Register the adapters in your `ChildLocator` under Commando's names.
+4. Commando's offsets then land on the same body part. A slim survivor needs a build factor below 1 on `ratio`; pure height scaling left Ultron's hoof and glasses oversized and floating (0.75 fixed it).
+
+If your rig pins bone 0 to identity in its animator, pin it before measuring the rest pose.
+
+Displays attach to transforms of the current rig. When a costume swap or a late `Start` rebuilds the rig, the old displays die with it, and any display requested before the rig existed never spawned. After every rig build call `DisableAllItemDisplays()`, clear the equipment and key-item displays, then `UpdateItemDisplay(body.inventory)` and restore them. Skip all of it while `body.inventory` is null: `CharacterModel.SetEquipmentDisplay` with an unchanged index dereferences `body.inventory` and throws on a fresh body.
+
+Verify with a dev command that calls `inventory.GiveItemString(name, 1)` / `GiveEquipmentString(name)` on the server and screenshots front, side and back. One costume is not every costume; rebuild once and shoot again.
+
+## What the Commando clone drags along
+
+Cloning `CommandoBody` keeps its `SfxLocator`. Clear `deathSound` and `barkSound` when the survivor plays its own death line, or both play. The other fields (landing, jump) are generic.
+
+## Texture memory
+
+`ImageConversion.LoadImage(tex, bytes, false)` keeps a readable CPU copy of every texture beside the GPU one. A survivor with ~130 512² costume textures paid ~180 MB of RAM for nothing. Pass `true` unless code reads the pixels back; `Sprite.Create` does not need a readable texture.
+
+Check the bake output for byte-identical duplicates (a fallback `model.gz` that equals the default costume's) and maps the material builder drops (`_M`, `_S` masks). Keep them in the source tree; leave them out of the package.
+
 ## What counts as tested
 
 Loader `Awake` is not a stage test. An autorun that fires the four skills, swaps skins and logs the aim dot is a mechanics test. The autorun camera is not a gallery. The played run is the acceptance test for look, hover and sound.

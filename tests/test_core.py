@@ -266,6 +266,45 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(len(result["errors"]), 1)
         self.assertIn('"1.0.1"', result["errors"][0])
 
+    def test_survivor_warnings_flag_runtime_polish_gaps(self):
+        source = """
+        var s = ScriptableObject.CreateInstance<SurvivorDef>(); ContentAddition.AddSurvivorDef(s);
+        new BlastAttack { damageType = DamageType.Stun1s }.Fire();
+        waveOutWrite(h, p, 32);
+        ImageConversion.LoadImage(tex, bytes, false);
+        """
+        warnings = core.survivor_warnings(source)
+        self.assertEqual(len(warnings), 4, warnings)
+        self.assertIn("itemDisplayRuleSet", warnings[0])
+        self.assertIn("DamageType.Stun1s", warnings[1])
+
+    def test_survivor_warnings_accept_the_fixed_patterns(self):
+        source = """
+        ContentAddition.AddSurvivorDef(s); cm.itemDisplayRuleSet = rules;
+        new BulletAttack { damageType = new DamageTypeCombo(DamageType.Generic, DamageTypeExtended.Generic, DamageSource.Primary) };
+        new BlastAttack { damageType = DamageTypeCombo.GenericSpecial };
+        waveOutWrite(h, p, 32); var v = AudioManager.cvVolumeSfx.GetString();
+        ImageConversion.LoadImage(tex, bytes, true);
+        """
+        self.assertEqual(core.survivor_warnings(source), [])
+
+    def test_audit_maps_core_namespaces_to_r2api_core(self):
+        # NetworkCompatibility lives in R2API.Utils, which ships in R2API.Core; this was a false error on Ultron.
+        mod = self._audit_mod(["RiskofThunder-R2API_Core-5.3.0"], 'using R2API.Utils;\nclass P {}')
+        self.assertTrue(core.audit_project(mod)["valid"])
+
+    def test_survivor_damage_warning_reads_one_initializer_value(self):
+        source = "new BlastAttack { damageType = DamageType.Generic, procCoefficient = 0f, damageType = type };"
+        warnings = core.survivor_warnings(source)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("(DamageType.Generic)", warnings[0])
+
+    def test_audit_surfaces_survivor_warnings_without_failing(self):
+        mod = self._audit_mod([], 'class P { void A() { ContentAddition.AddSurvivorDef(s); } }')
+        result = core.audit_project(mod)
+        self.assertTrue(result["valid"], result["errors"])
+        self.assertEqual(len(result["warnings"]), 1)
+
     def test_procedural_template_scaffolds_and_compiles_cleanly(self):
         # The point of this template is that no Unity editor is needed to ship geometry.
         result = core.new_mod("RockMod", "Team", template="procedural")

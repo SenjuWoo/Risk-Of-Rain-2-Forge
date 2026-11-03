@@ -1,3 +1,11 @@
+# 1.10.0 — Survivor polish: item displays, damage source, audio volume (2026-11-03)
+
+- `forge audit` warns (does not fail) on four survivor gaps that compile, validate and play solo: a registered survivor with no `itemDisplayRuleSet`, a `BulletAttack`/`BlastAttack`/`OverlapAttack` whose `damageType` is a literal `DamageType.` with no `DamageSource`, `waveOutWrite` without `AudioManager.cvVolumeSfx`, and `ImageConversion.LoadImage(..., false)`.
+- `forge audit` no longer fails `using R2API.Utils;` (and `MiscHelpers`, `AutoVersionGen`): those namespaces ship in R2API.Core, so they need `R2API_Core`, not a nonexistent `R2API_Utils`. It was a false error on Ultron.
+- `docs/RUNTIME.md`: item displays without an editor by sharing Commando's rule set through per-bone adapters (rotation frame, height ratio, build factor), rebuilding displays after every rig build, and the `SetEquipmentDisplay` null-inventory throw. Also: motor writes need `hasEffectiveAuthority`, attacks need a `DamageSource`, clear the cloned Commando `SfxLocator` death/bark cues, load textures non-readable, keep bake duplicates out of the package.
+- `docs/AUDIO.md`: Route B code for the game's Master x SFX sliders (`AudioManager.cvVolumeMaster`/`cvVolumeSfx`) and camera-distance falloff, and scaling into the native buffer instead of a managed copy per shot.
+- 5 regression tests.
+
 # 1.9.0 — Audit catches silent audio and version drift (2026-11-03)
 
 - `forge audit` fails every `"Play_..."` string in C# that is not a key in a shipped `events.txt`. A missing key plays nothing and throws nothing; Gnar's transform voice was silent for a release because of it.

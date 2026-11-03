@@ -1,2 +1,2 @@
 """Local, agent-first Risk of Rain 2 modding workbench."""
-__version__ = "1.9.0"
+__version__ = "1.10.0"
