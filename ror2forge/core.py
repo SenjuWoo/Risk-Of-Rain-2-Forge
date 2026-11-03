@@ -616,7 +616,9 @@ def survivor_warnings(source: str) -> list[str]:
     if "waveOutWrite" in source and not re.search(r"cvVolumeSfx|volume_sfx", source):
         warnings.append("plays through waveOut but never reads the game's SFX volume; the in-game slider does nothing "
                         "(docs/AUDIO.md, Route B)")
-    if re.search(r"LoadImage\s*\([^;]*,\s*false\s*\)", source):
+    # Compress() needs readable pixels; Apply(false, true) then frees the CPU copy, so that pair is the correct pattern.
+    frees_cpu_copy = re.search(r"\.Apply\s*\([^;)]*,\s*true\s*\)", source)
+    if re.search(r"LoadImage\s*\([^;]*,\s*false\s*\)", source) and not frees_cpu_copy:
         warnings.append("ImageConversion.LoadImage(..., false) keeps a CPU copy of every texture; pass true unless the "
                         "pixels are read back (docs/RUNTIME.md, 'Texture memory')")
     return warnings
