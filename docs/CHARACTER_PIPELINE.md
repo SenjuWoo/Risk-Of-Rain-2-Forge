@@ -152,6 +152,9 @@ Each of these was measured on the baseline above, not inferred.
 | Only some costumes work, or names and icons are invented | A hand-typed skin list or a clamp on the skin index | Generate the skin table from the game's material files; no clamp |
 | Sound ignores the in-game slider or plays full volume across the map | winmm bypasses Wwise | Multiply gain by `cvVolumeMaster` x `cvVolumeSfx` and fall off by camera distance. `docs/AUDIO.md` |
 | Flight is much faster than the tooltip | A speed buff plus a second velocity multiply, or vanilla `CloakSpeed` stacked on top | One stat-hook bonus. See `docs/RUNTIME.md` |
+| A flying skill is invisible to everyone but the caster | The state only moves the projectile under `isAuthority`; nothing is replicated | Run the state on every client so each flies its own copy; damage on the server only. `docs/RUNTIME.md` |
+| Every effect is a bright blob, or the water layers vanish | NUD blend factors misread (alpha drawn additive, (2,0) toon water hidden) | Decode dst against the source game's reader (dst 1 alpha, 2/7 additive, 3/5 reverse-subtract); carry per-vertex RGBA. `docs/RUNTIME.md` |
+| An automated run hangs until the timeout | A harness step threw on a hidden render layer and never restored it | Restore in `finally`; cap runs at one or two tries. `docs/RUNTIME.md` |
 
 ## Verification loop
 
