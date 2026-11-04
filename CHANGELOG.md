@@ -1,3 +1,8 @@
+# 1.12.0 — Shark sync, effect blend codes and bounded test runs (2026-11-04)
+
+- `docs/RUNTIME.md` records three Kisame lessons: flying skill states run on every client so everyone sees the projectile while the server applies damage; Storm 4 NUD blend factors (dst 1 alpha, 2/7 additive, 3/5 reverse-subtract, high bits are flags) with per-vertex RGBA and DISABLEREMAP/VERTEXCOLOR/VERTEXALPHA materials, boost/bias 1/0, and the alpha-test reference in curve slot 16; automated game runs must be time-bounded with harness state restored in a finally (a hidden-layer throw once cost ~50 minutes).
+- `docs/CHARACTER_PIPELINE.md` failure modes gained three rows for those symptoms.
+
 # 1.11.0 — Survivor checklist (2026-11-03)
 
 - New `docs/SURVIVOR_CHECKLIST.md`, also `forge guide checklist`: twelve defaults of a survivor (item displays, damage source, authority, clone leftovers, audio volume and distance, texture memory, package layout, R2API names, live model, buffs, costumes, tooltips) and a definition of done. Written so a weaker model reads one page and cannot skip the items that compile, validate and play solo. The agent guide, skill and `AGENTS.md` send survivor work there first.

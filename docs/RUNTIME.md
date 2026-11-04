@@ -103,3 +103,26 @@ Check the bake output for byte-identical duplicates (a fallback `model.gz` that 
 Loader `Awake` is not a stage test. An autorun that fires the four skills, swaps skins and logs the aim dot is a mechanics test. The autorun camera is not a gallery. The played run is the acceptance test for look, hover and sound.
 
 Quit-time `NullReferenceException` in `EnableCustomRenderTextureOnLight` and `GenericPool` release, and `ClipCursor` access denied, showed up with this survivor and are not this mod. Filter them before blaming the plugin.
+
+## Flying projectiles are not replicated
+
+A skill state that only moves its projectile under `isAuthority` simulates it on the caster's screen only. Every other player never sees it move, even when the host applies the damage. The pattern that works (Kisame's sharks, Nov 2026):
+
+- Run the skill state on every client, so every client flies its own visual copy.
+- Apply damage, eating and healing on the server only (`NetworkServer.active`), keyed off the hit, not off the visual.
+
+Clients grow their own copy by flight time only; only the server's copy grows by eaten projectiles. That split is part of the behavior, not an approximation of it.
+
+## Effects from another game: blend codes and per-vertex color
+
+Storm 4's NUD effect materials store the blend factors directly. For NDP3 they follow Smash Forge's `NudEnums` (`NudEnums.cs`): dst 1 is `OneMinusSrcAlpha` (normal alpha), 2 and 7 are `One` (additive), 3 and 5 are reverse-subtract, 0 is no blend. High bits on the dst value (0xB1) are flags, not factors. Kisame's own body is (2,0) — additive with no dst factor — which is toon water, not glow.
+
+Reading those codes wrong is the expensive failure: a first pass drew alpha layers as additive glow and hid the (2,0) water layers as "multiply", so every effect looked like a bright blob. Check the codes against the source game's own reader before inventing a layer class, and use the character's own body material as a control — it confirms the decoding without a screenshot.
+
+Storm effect meshes also carry tint and edge fades as RGBA per vertex. A bake that keeps only UVs loses the fade, so a soft edge renders as a hard silhouette. Export the RGBA (GMD2 is GMD1 plus one RGBA per vertex) and drive the runtime materials with `DISABLEREMAP` plus `VERTEXCOLOR` plus `VERTEXALPHA`. Boost and bias on the vertex color must stay 1/0: they scale the color too (blown white, or black).
+
+Material animation curves (format 4, 18 floats) carry the UV offset and scale, and slot 16 is the alpha-test reference 0..255. Multiply shadows and second texture layers need Storm's composite shader; leaving them off is a declared gap, not a silent default.
+
+## Automated game runs are bounded
+
+A dev step that throws mid-capture can leave the character on a hidden render layer and stall the script until the run timeout. Every harness step that changes render layers, visibility or camera state restores them in a `finally`, and its own coroutine gets a wait, not the run's remaining time. Cap the run at one or two tries and a few minutes. The first time this was learned it cost about 50 minutes of a stuck dev game (Kisame, Nov 2026).
