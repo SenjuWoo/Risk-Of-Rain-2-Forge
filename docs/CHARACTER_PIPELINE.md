@@ -155,6 +155,8 @@ Each of these was measured on the baseline above, not inferred.
 | A flying skill is invisible to everyone but the caster | The state only moves the projectile under `isAuthority`; nothing is replicated | Run the state on every client so each flies its own copy; damage on the server only. `docs/RUNTIME.md` |
 | Every effect is a bright blob, or the water layers vanish | NUD blend factors misread (alpha drawn additive, (2,0) toon water hidden) | Decode dst against the source game's reader (dst 1 alpha, 2/7 additive, 3/5 reverse-subtract); carry per-vertex RGBA. `docs/RUNTIME.md` |
 | An automated run hangs until the timeout | A harness step threw on a hidden render layer and never restored it | Restore in `finally`; cap runs at one or two tries. `docs/RUNTIME.md` |
+| A dash passes through walls or drops the survivor out of the map | `Motor.SetPosition` teleports past the kinematic controller, and `velocity` applies the distance twice | `rootMotion += dir * step` with `velocity = 0`; no extra sphere cast; end at distance or `duration * 1.2`. `docs/RUNTIME.md` |
+| A projectile ultimate flies past the target and deals nothing | It only detonates at the end of its travel | Add a per-step contact test, keep the end-of-travel burst as fallback. `docs/RUNTIME.md` |
 
 ## Verification loop
 
