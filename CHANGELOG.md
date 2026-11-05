@@ -1,3 +1,8 @@
+# 1.12.2 — Cloth on a baked rig (2026-11-04)
+
+- `docs/RUNTIME.md` gains "Cloth on a baked rig": drive the cloth bones yourself in `LateUpdate` (`DefaultExecutionOrder` above the animation driver) from ground speed, vertical speed and turn rate, in world space, with the swing falling off by chain depth; and give the cloth a visible inside by appending a reversed-winding, flipped-normal copy of every submesh weighted to cloth bones. Measured on Odinforce Ultron's cape (3,222 -> 6,444 and 14,493 -> 28,986 vertices) with the outside unchanged.
+- `docs/CHARACTER_PIPELINE.md` failure modes gained two rows: a rigid or one-sided cape, and an ultimate that lands shorter than the primary because its impact point had its own range cap.
+
 # 1.12.1 — Dash movement and projectile ultimates (2026-11-04)
 
 - `docs/RUNTIME.md`: a dash must move through `characterMotor.rootMotion` (the kinematic controller sweeps it), never `Motor.SetPosition` plus `velocity` — measured on Kisame 1.1.0, which passed through geometry and dropped out of the map. Also records why a hand-rolled forward `SphereCast` on top of the controller cut an 18 m rush to 7.4 m, the 15% slope headroom with a `duration * 1.2` end condition (18.29 m measured), the `hurtBoxesDeactivatorCounter` and `AddOneStock()` patterns, and why a projectile ultimate needs a per-step contact test and `FalloffModel.None` to match its tooltip.

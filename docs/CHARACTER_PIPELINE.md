@@ -157,6 +157,8 @@ Each of these was measured on the baseline above, not inferred.
 | An automated run hangs until the timeout | A harness step threw on a hidden render layer and never restored it | Restore in `finally`; cap runs at one or two tries. `docs/RUNTIME.md` |
 | A dash passes through walls or drops the survivor out of the map | `Motor.SetPosition` teleports past the kinematic controller, and `velocity` applies the distance twice | `rootMotion += dir * step` with `velocity = 0`; no extra sphere cast; end at distance or `duration * 1.2`. `docs/RUNTIME.md` |
 | A projectile ultimate flies past the target and deals nothing | It only detonates at the end of its travel | Add a per-step contact test, keep the end-of-travel burst as fallback. `docs/RUNTIME.md` |
+| A cape hangs rigid, or vanishes when seen from below | No cloth asset on a baked rig; the cloth panel is one layer of triangles | Swing the cloth bones in `LateUpdate` and append a reversed-winding copy of the cloth submesh. `docs/RUNTIME.md` |
+| An ultimate lands far shorter than the primary | Its impact point had its own range cap | Share the primary's range constant with the ultimate. `docs/RUNTIME.md` |
 
 ## Verification loop
 
