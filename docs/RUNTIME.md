@@ -143,6 +143,15 @@ characterDirection.moveVector = dir;                    // keep facing the rush
 
 Invulnerability for a dash: increment `HurtBoxGroup.hurtBoxesDeactivatorCounter` on the model and decrement it in `OnExit`. Do not set `HealthComponent.godMode` (it also blocks fall damage and self-damage) and do not disable the main hurtbox collider by hand (an interrupted state can leak it). A cooldown refund belongs in `GenericSkill.AddOneStock()`, not in direct writes to `stock` and `rechargeStopwatch`.
 
+## Cloth on a baked rig
+
+A rig baked to a custom pack has no Unity cloth asset and no Animator controller, so a cape or robe hangs perfectly rigid. Two things are needed, and both are cheap:
+
+- **Motion.** Rotate the cloth bones yourself in `LateUpdate`, in world space, from the body's motion: ground speed, vertical speed and turn rate, smoothed. World-space `Quaternion.AngleAxis` around the character's right axis and world up is orientation-independent; local-axis guesses swing the cape sideways. Apply the delta to `bone.rotation` after the clip pose is written, with a `DefaultExecutionOrder` above the driver's. Build the chain list by name (`cloth`, `cape`, `skirt`), give each bone a depth, and fall the swing off with depth so the chain curves instead of hinging rigidly.
+- **A visible inside.** Cloth is usually one layer of triangles. With a one-sided material the inside is culled, so the cape disappears when the camera looks up at it. Append a reversed-winding copy of the cloth submesh with flipped normals and the same UVs and bone weights, in the mesh builder. That costs one layer of triangles and works with any shader; it does not depend on a cull property that a given RoR2 shader may not have. Measured on a cape of 3,222 and 14,493 vertices: exactly 2x after the append, and the outside is unchanged because the copy faces inward.
+
+Select the affected submeshes by weight, not by name or material: any vertex bound to a cloth bone. A submesh that borrows a few cloth-weighted vertices is not the cape.
+
 ## A projectile ultimate has to burst on contact
 
 Great Shark Bullet only detonated at the end of its 2.2 s travel. Fired at a boss 11 m away it flew about 35 m, exploded behind the player and dealt nothing — measured, not assumed. A projectile that is supposed to hit what you aim at needs a contact test every step (overlap at its own radius, `FriendlyFireManager.ShouldSplashHitProceed` for the team filter), with the end-of-travel burst kept as the fallback.
