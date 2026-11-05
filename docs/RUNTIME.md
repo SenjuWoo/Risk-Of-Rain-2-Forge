@@ -123,6 +123,32 @@ Storm effect meshes also carry tint and edge fades as RGBA per vertex. A bake th
 
 Material animation curves (format 4, 18 floats) carry the UV offset and scale, and slot 16 is the alpha-test reference 0..255. Multiply shadows and second texture layers need Storm's composite shader; leaving them off is a declared gap, not a silent default.
 
+## A dash belongs in rootMotion, not in Motor.SetPosition
+
+`characterMotor.Motor.SetPosition(p)` is a teleport. It skips the kinematic controller's sweep, so a rush that writes it every frame passes through walls, floats over ledges, and — measured on Kisame 1.1.0 — ends under the terrain and drops the survivor out of the map. Writing `velocity` in the same frame applies the distance a second time.
+
+The vanilla pattern (`EntityStates.Huntress.BlinkState`) is the one to copy:
+
+```csharp
+characterMotor.velocity = Vector3.zero;                 // nothing else moves him
+characterMotor.rootMotion += dir * step;                // BeforeCharacterUpdate runs Motor.MoveCharacter
+characterMotor.moveDirection = Vector3.zero;
+characterDirection.moveVector = dir;                    // keep facing the rush
+```
+
+`rootMotion` is consumed in `BeforeCharacterUpdate` and passed through `Motor.MoveCharacter`, which collides and slides, so the rush follows terrain and stops at walls. Two things this taught:
+
+- Do not add your own forward `SphereCast` to cap the step on top of it. A 0.4 m sphere at hip height clipped rising ground and cut an 18 m rush to 7.4 m; the controller already sweeps.
+- A slope costs horizontal distance, because part of the displacement goes into climbing. A state that ends at `fixedAge >= duration` therefore arrives short uphill. Give the step about 15% headroom and end at `traveled >= distance || fixedAge >= duration * 1.2`. Measured 18.29 m against an 18 m target with the headroom; `grounded` stayed true throughout.
+
+Invulnerability for a dash: increment `HurtBoxGroup.hurtBoxesDeactivatorCounter` on the model and decrement it in `OnExit`. Do not set `HealthComponent.godMode` (it also blocks fall damage and self-damage) and do not disable the main hurtbox collider by hand (an interrupted state can leak it). A cooldown refund belongs in `GenericSkill.AddOneStock()`, not in direct writes to `stock` and `rechargeStopwatch`.
+
+## A projectile ultimate has to burst on contact
+
+Great Shark Bullet only detonated at the end of its 2.2 s travel. Fired at a boss 11 m away it flew about 35 m, exploded behind the player and dealt nothing — measured, not assumed. A projectile that is supposed to hit what you aim at needs a contact test every step (overlap at its own radius, `FriendlyFireManager.ShouldSplashHitProceed` for the team filter), with the end-of-travel burst kept as the fallback.
+
+The blast also used `FalloffModel.SweetSpot`, so only the middle of the radius took the advertised number; the tooltip promised the full figure. Use `FalloffModel.None` when the tooltip states one number for the blast.
+
 ## Automated game runs are bounded
 
 A dev step that throws mid-capture can leave the character on a hidden render layer and stall the script until the run timeout. Every harness step that changes render layers, visibility or camera state restores them in a `finally`, and its own coroutine gets a wait, not the run's remaining time. Cap the run at one or two tries and a few minutes. The first time this was learned it cost about 50 minutes of a stuck dev game (Kisame, Nov 2026).

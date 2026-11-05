@@ -1,3 +1,8 @@
+# 1.12.1 — Dash movement and projectile ultimates (2026-11-04)
+
+- `docs/RUNTIME.md`: a dash must move through `characterMotor.rootMotion` (the kinematic controller sweeps it), never `Motor.SetPosition` plus `velocity` — measured on Kisame 1.1.0, which passed through geometry and dropped out of the map. Also records why a hand-rolled forward `SphereCast` on top of the controller cut an 18 m rush to 7.4 m, the 15% slope headroom with a `duration * 1.2` end condition (18.29 m measured), the `hurtBoxesDeactivatorCounter` and `AddOneStock()` patterns, and why a projectile ultimate needs a per-step contact test and `FalloffModel.None` to match its tooltip.
+- `docs/CHARACTER_PIPELINE.md` failure modes gained two rows for those symptoms.
+
 # 1.12.0 — Shark sync, effect blend codes and bounded test runs (2026-11-04)
 
 - `docs/RUNTIME.md` records three Kisame lessons: flying skill states run on every client so everyone sees the projectile while the server applies damage; Storm 4 NUD blend factors (dst 1 alpha, 2/7 additive, 3/5 reverse-subtract, high bits are flags) with per-vertex RGBA and DISABLEREMAP/VERTEXCOLOR/VERTEXALPHA materials, boost/bias 1/0, and the alpha-test reference in curve slot 16; automated game runs must be time-bounded with harness state restored in a finally (a hidden-layer throw once cost ~50 minutes).
