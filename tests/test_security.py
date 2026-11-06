@@ -9,7 +9,7 @@ import unittest
 import zipfile
 from unittest.mock import patch
 
-from ror2forge import core
+from ror2forge import core, safefs
 
 REAL_ROOT = core.ROOT
 
@@ -128,6 +128,66 @@ class IsolationTests(unittest.TestCase):
             with self.assertRaises(ValueError) as raised:
                 core.project_input(victim, victim / "content" / "asset.txt")
         self.assertIn("links or junctions", str(raised.exception))
+
+    def test_cross_project_hardlink_is_rejected(self):
+        other = self._project("Other")
+        (other / "PRIVATE-do-not-ship.txt").write_text("secret", encoding="utf-8")
+        victim = self._project()
+        (victim / "content").mkdir(exist_ok=True)
+        link = victim / "content/asset.txt"
+        try:
+            os.link(other / "PRIVATE-do-not-ship.txt", link)
+        except (OSError, NotImplementedError):
+            self.skipTest("this platform cannot create hard links")
+        self._receipt(victim)
+        with self.assertRaises(ValueError) as raised:
+            core.package_mod("Victim")
+        self.assertIn("multiple hard links", str(raised.exception))
+
+    def test_file_swapped_after_validation_is_never_read(self):
+        other = self._project("Other")
+        (other / "PRIVATE-do-not-ship.txt").write_text("secret", encoding="utf-8")
+        victim = self._project()
+        (victim / "content").mkdir(exist_ok=True)
+        asset = victim / "content/asset.txt"
+        asset.write_text("mine", encoding="utf-8")
+        self._receipt(victim)
+        real = core.project_input
+
+        def swap_after_validation(folder, path):
+            resolved = real(folder, path)
+            if resolved == asset.resolve():
+                resolved.unlink()
+                make_link(other / "PRIVATE-do-not-ship.txt", resolved)
+            return resolved
+
+        with patch.object(core, "project_input", side_effect=swap_after_validation):
+            with self.assertRaises(ValueError):
+                core.package_mod("Victim")
+
+    def test_packaging_quota_is_enforced_before_reading(self):
+        victim = self._project()
+        (victim / "content").mkdir(exist_ok=True)
+        big = victim / "content/huge.bin"
+        with big.open("wb") as handle:
+            handle.truncate(1024)
+        self._receipt(victim)
+        with patch.object(core, "Budget", lambda *a, **k: safefs.Budget(files=10, total=10, per_file=10)):
+            with self.assertRaises(ValueError) as raised:
+                core.package_mod("Victim")
+        self.assertIn("per-file limit", str(raised.exception))
+
+    def test_lockfile_without_provenance_is_refused(self):
+        victim = self._project()
+        (victim / "src" / "packages.lock.json").write_text("{}", encoding="utf-8")
+        core.write_json(victim / "build/receipt.json", {
+            "assembly_sha256": core.sha256(victim / "build/bin/Victim.dll"),
+            "source_sha256": core.source_digest(victim),
+            "package_sha256": core.package_digest(victim),
+        })
+        with self.assertRaises(ValueError) as raised:
+            core.package_mod("Victim")
+        self.assertIn("no lock provenance", str(raised.exception))
 
 
 class PackageSnapshotTests(unittest.TestCase):

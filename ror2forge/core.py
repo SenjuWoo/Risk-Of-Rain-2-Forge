@@ -6,6 +6,7 @@ optional diagnostic details go to stderr through the CLI's --debug switch.
 from __future__ import annotations
 
 from collections import deque
+from .safefs import Budget, read_bounded
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -879,11 +880,13 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
         raise ValueError("PluginVersion must agree with the package version.")
     if receipt.get("source_sha256") != source_digest(folder) or receipt.get("assembly_sha256") != sha256(dll):
         raise ValueError("Source or DLL changed since the successful build; build again before packaging.")
-    if receipt.get("lock_sha256"):
-        lock = next((candidate for candidate in (folder / "src/packages.lock.json", folder / "packages.lock.json")
-                     if candidate.is_file()), None)
-        if lock is None or sha256(lock) != receipt["lock_sha256"]:
-            raise ValueError("packages.lock.json changed since the successful build; build again before packaging.")
+    lock = next((candidate for candidate in (folder / "src/packages.lock.json", folder / "packages.lock.json")
+                 if candidate.is_file()), None)
+    if lock is not None and not receipt.get("lock_sha256"):
+        raise ValueError("A lockfile is present but the build receipt has no lock provenance; build again "
+                         "(receipts older than 1.13.3 cannot vouch for the lock).")
+    if lock is not None and sha256(lock) != receipt["lock_sha256"]:
+        raise ValueError("packages.lock.json changed since the successful build; build again before packaging.")
     if receipt.get("package_sha256") != package_digest(folder):
         raise ValueError("Manifest, README, icon or content/ changed since the successful build, or the receipt "
                          "predates package provenance; build again before packaging.")
@@ -900,12 +903,13 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
     # Snapshot every packaged byte now, after boundary validation. The archive is then written from memory,
     # so replacing a file mid-package (including the DLL) cannot put unverified bytes in a trusted ZIP.
     payload: dict[str, bytes] = {}
+    budget = Budget()
 
     def take(archive_name: str, source: Path) -> None:
+        # Boundary check first, then one verified open: the bytes come from the same handle that was checked,
+        # so swapping the path to a link, or hardlinking another project's file, cannot get past this.
         resolved = project_input(folder, source)
-        if not resolved.is_file():
-            raise ValueError(f"Packaged input is not a file: {source}")
-        payload[archive_name] = resolved.read_bytes()
+        payload[archive_name] = read_bounded(resolved, budget, archive_name)
 
     take("manifest.json", folder / "manifest.json")
     take("README.md", folder / "README.md")
@@ -957,6 +961,69 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
             "runtime_verified": False,
             "note": "A valid archive proves packaging only; it does not show that the mod loads or works in game.",
             "publish": "not requested"}
+
+
+def _repo_slug() -> str | None:
+    """owner/repo from origin, for read-only CI lookups."""
+    try:
+        url = subprocess.run(["git", "remote", "get-url", "origin"], cwd=ROOT, capture_output=True,
+                             text=True, timeout=20).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.search(r"github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$", url)
+    return f"{match.group(1)}/{match.group(2)}" if match else None
+
+
+def _ci_state(commit: str) -> tuple[str, list[str]]:
+    """Independent CI evidence for a commit: verified, failed, pending or unknown. Never trusts a receipt."""
+    slug = _repo_slug()
+    if not slug or not commit:
+        return "unknown", []
+    try:
+        result = subprocess.run(["gh", "api", f"repos/{slug}/commits/{commit}/check-runs"], capture_output=True,
+                                text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return "unknown", []
+    if result.returncode != 0:
+        return "unknown", []
+    try:
+        runs = json.loads(result.stdout).get("check_runs", [])
+    except ValueError:
+        return "unknown", []
+    names = [f"{run.get('name')}:{run.get('conclusion')}" for run in runs if isinstance(run, dict)]
+    if not runs:
+        return "unknown", []
+    if any((run.get("status") or "") != "completed" for run in runs if isinstance(run, dict)):
+        return "pending", names
+    if any((run.get("conclusion") or "") != "success" for run in runs if isinstance(run, dict)):
+        return "failed", names
+    return "verified", names
+
+
+def _check_source_archive(path: Path, expected_files: int | None) -> list[str]:
+    """A release source archive must be a real, sane ZIP, not merely a file with the right hash."""
+    problems: list[str] = []
+    if not zipfile.is_zipfile(path):
+        return ["source archive is not a ZIP file"]
+    with zipfile.ZipFile(path) as archive:
+        members = archive.infolist()
+        names = [member.filename for member in members]
+        if archive.testzip() is not None:
+            problems.append("source archive has a corrupt member")
+        if len(members) > 20000:
+            problems.append("source archive has too many members")
+        if sum(member.file_size for member in members) > 2 * 1024 * 1024 * 1024:
+            problems.append("source archive expands beyond 2 GiB")
+        folded = [name.casefold() for name in names]
+        if len(set(folded)) != len(folded):
+            problems.append("source archive has duplicate members")
+        for name in names:
+            parts = PurePosixPath(name).parts
+            if name.startswith("/") or ".." in parts or ":" in name:
+                problems.append(f"unsafe member path: {name}")
+        if expected_files is not None and len(members) != expected_files:
+            problems.append(f"source archive has {len(members)} entries but the receipt claims {expected_files}")
+    return problems
 
 
 def release_check(mode: str = "prerelease", assets: str | Path | None = None) -> dict:
@@ -1064,40 +1131,72 @@ def release_check(mode: str = "prerelease", assets: str | Path | None = None) ->
                 receipt = read_json(receipts)
             except (ValueError, OSError) as exc:
                 asset_errors.append(f"BUILD-RECEIPT.json is not valid JSON: {exc}")
+        if not isinstance(receipt, dict) or not receipt:
+            asset_errors.append("BUILD-RECEIPT.json must be a non-empty JSON object")
+            receipt = {}
+        artifact: dict = {}
         if receipt:
-            artifact = receipt.get("artifact") or {}
-            for key in ("file", "sha256", "size_bytes"):
-                if not artifact.get(key):
-                    asset_errors.append(f"receipt artifact is missing {key}")
-            if artifact.get("file") and artifact.get("file") not in listed:
+            for key in ("commit", "artifact", "ci_checks"):
+                if key not in receipt:
+                    asset_errors.append(f"receipt is missing {key}")
+            if not isinstance(receipt.get("artifact"), dict):
+                asset_errors.append("receipt artifact must be an object")
+            else:
+                artifact = receipt["artifact"]
+                for key in ("file", "sha256", "size_bytes", "files"):
+                    if not artifact.get(key):
+                        asset_errors.append(f"receipt artifact is missing {key}")
+                if not isinstance(artifact.get("size_bytes"), int) or not isinstance(artifact.get("files"), int):
+                    asset_errors.append("receipt artifact size_bytes/files must be integers")
+            checks = receipt.get("ci_checks")
+            if not isinstance(checks, list) or not checks:
+                asset_errors.append("receipt lists no CI checks")
+            else:
+                for entry in checks:
+                    if not isinstance(entry, dict) or entry.get("conclusion") != "success":
+                        asset_errors.append("receipt claims CI that did not succeed")
+                        break
+            expected_name = f"Risk-of-Rain-2-Forge-{version}-source.zip"
+            if artifact.get("file") and artifact["file"] != expected_name:
+                asset_errors.append(f"receipt artifact {artifact['file']} is not this release's {expected_name}")
+            if expected_name not in listed:
+                asset_errors.append(f"the release does not publish {expected_name}")
+            if artifact.get("file") and artifact["file"] not in listed:
                 asset_errors.append("receipt artifact is not covered by SHA256SUMS")
             claimed_file = folder / str(artifact.get("file", ""))
             if artifact.get("sha256") and claimed_file.is_file():
                 if sha256(claimed_file) != artifact["sha256"]:
                     asset_errors.append("receipt artifact hash does not match the published file")
-                if artifact.get("size_bytes") and claimed_file.stat().st_size != artifact["size_bytes"]:
+                if isinstance(artifact.get("size_bytes"), int) and claimed_file.stat().st_size != artifact["size_bytes"]:
                     asset_errors.append("receipt artifact size does not match the published file")
+            source = folder / expected_name
+            if source.is_file():
+                asset_errors.extend(_check_source_archive(source, artifact.get("files")))
             actual = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
                                     text=True, timeout=20).stdout.strip()
             if not receipt.get("commit"):
                 asset_errors.append("receipt has no commit")
             elif receipt["commit"] != actual:
                 asset_errors.append(f"receipt commit {receipt['commit']} != HEAD {actual}")
-            if not receipt.get("ci_checks"):
-                asset_errors.append("receipt lists no CI checks")
             asset_report = {"files": sorted(listed), "commit_claimed": receipt.get("commit"),
                             "commit_actual": actual}
     errors.extend(asset_errors)
     version_consistent = not [e for e in errors if any(k in e for k in ("VERSION", "version", "CHANGELOG"))]
     tag_verified = tag_status in {"ok", "not_required"}
     assets_verified = bool(assets) and not asset_errors
+    ci_state, ci_names = (_ci_state((asset_report or {}).get("commit_actual") or "")
+                          if assets_verified else ("unknown", []))
+    if mode == "release" and ci_state == "failed":
+        errors.append("independent CI check for this commit did not succeed")
+    release_verified = (not errors and tag_status == "ok" and assets_verified and ci_state == "verified")
     return {"mode": mode, "version": version, "package_version": package_version, "changelog": heading,
             "tag": tag_name, "tag_status": tag_status, "assets": asset_report,
             "checks": {"version": version_consistent, "tag": tag_verified,
-                       "assets": assets_verified, "ci": None},
+                       "assets": assets_verified, "ci": ci_state},
+            "ci_checks": ci_names,
             "valid": not errors,
-            "release_verified": not errors and tag_verified and assets_verified,
-            "verified": not errors and tag_verified and assets_verified,
+            "release_verified": release_verified,
+            "verified": release_verified,
             "errors": errors, "warnings": warnings,
             "note": "A matching version set proves the release is labelled consistently; it does not prove the code works."}
 
