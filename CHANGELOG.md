@@ -1,3 +1,14 @@
+# 1.13.5 — Ownership corrections for declared classes and ContentAddition (2026-11-06)
+
+- A mod that declares its own `class SkillsAPI {}` is no longer treated as using R2API.Skills; the bare-name
+  check now skips any name the file itself declares as a class, struct, interface, enum or record.
+- `ContentAddition` is mapped to `R2API.ContentManagement`. It lives in a module-root file that is not named
+  `*API.cs`, so the tree-derived table missed it and a mod could use it without declaring the package. Curated
+  entries are recorded under `curated` in `ror2forge/r2api_ownership.json` with their upstream source, and the
+  refresh script preserves them while regenerating the derived tables.
+- The survivor-warning test that encoded the old false negative now declares the ContentManagement dependency.
+- 164 tests.
+
 # 1.13.4 — Separate the tag gate from published-asset proof (2026-11-06)
 
 - `release-check --mode release` without `--assets` no longer fails the tag gate: an unpublished tag has no

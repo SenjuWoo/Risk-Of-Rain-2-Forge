@@ -72,6 +72,10 @@
     "SoundAPI": "Sound",
     "TeamsAPI": "Teams",
     "TempVisualEffectAPI": "TempVisualEffect",
-    "UnlockableAPI": "Unlockable"
+    "UnlockableAPI": "Unlockable",
+    "ContentAddition": "ContentManagement"
+  },
+  "curated": {
+    "ContentAddition": "https://github.com/risk-of-thunder/R2API/blob/master/R2API.ContentManagement/ContentAddition.cs"
   }
 }
