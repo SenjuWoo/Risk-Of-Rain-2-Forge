@@ -1,3 +1,14 @@
+# 1.13.9 — Text archives must be exported without line-ending conversion (2026-11-06)
+
+- `git archive` applies the checkout's EOL conversion for `text=auto` files, so `core.autocrlf=false` alone still
+  produced CRLF for files with `eol: unspecified` and the tree comparison correctly rejected the archive. The release
+  build now uses `git -c core.autocrlf=false -c core.eol=lf archive`, which reproduces the stored blobs exactly.
+  `RELEASE_PROCESS.md` documents both flags and why.
+- `checks.version` no longer flips to false because an asset error's message contains the word "VERSION": the version
+  verdict is taken before asset errors are appended.
+- v1.13.8 is superseded: its published archive carries CRLF text and fails the content check. It was left in place,
+  unmodified, with a note pointing here.
+
 # 1.13.8 — Published source must equal the tag; handle-proven reads (2026-11-06)
 
 - A release archive is now compared, byte for byte, to the tagged commit: `git ls-tree` gives the blob hash of every

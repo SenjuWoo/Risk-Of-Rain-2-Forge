@@ -1259,8 +1259,8 @@ def release_check(mode: str = "prerelease", assets: str | Path | None = None) ->
                 asset_errors.append(f"receipt commit {receipt['commit']} != HEAD {actual}")
             asset_report = {"files": sorted(listed), "commit_claimed": receipt.get("commit"),
                             "commit_actual": actual}
+    version_consistent = not errors          # only the VERSION/tag/changelog checks have run at this point
     errors.extend(asset_errors)
-    version_consistent = not [e for e in errors if any(k in e for k in ("VERSION", "version", "CHANGELOG"))]
     tag_verified = tag_status in {"ok", "not_required"}
     assets_verified = bool(assets) and not asset_errors
     ci_state, ci_names = (_ci_state((asset_report or {}).get("commit_actual") or "")

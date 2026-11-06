@@ -179,6 +179,12 @@ class ReleaseModeTests(unittest.TestCase):
         self.assertFalse(result["release_verified"])
         self.assertIn("entries", " ".join(result["errors"]))
 
+    def test_asset_errors_do_not_mark_the_version_inconsistent(self):
+        self._project()
+        result = self._release(self._publish(mutate=lambda r: {**r, "artifact": {**r["artifact"], "files": 99}}))
+        self.assertFalse(result["release_verified"])
+        self.assertTrue(result["checks"]["version"], result["errors"])
+
     def test_wrong_receipt_commit_fails(self):
         self._project()
         assets = self._publish(head="cafebabe")

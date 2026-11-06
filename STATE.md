@@ -1,6 +1,6 @@
 # Risk of Rain 2 Forge — verified handoff
 
-- Version: **1.13.8** — published source compared to the tagged tree, handle-proven reads on Windows and POSIX, pinned deterministic ownership refresh. 178 tests (3 skipped locally).
+- Version: **1.13.9** — published source compared to the tagged tree (LF export), handle-proven reads, pinned deterministic ownership refresh. 178 tests (3 skipped locally).
 - Goal: give any agent current tools, exact API inspection, tested templates and an efficient modding playbook.
 - User preference: CLI by default. MCP is optional, unregistered globally and never auto-started. No personal agent config/model choices changed.
 - Entry: `forge.cmd doctor`, `forge.cmd guide`, `AGENTS.md`. Source modules in ror2forge/, templates in templates/, reusable skill in skills/ror2-forge/.
