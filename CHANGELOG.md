@@ -1,3 +1,22 @@
+# 1.14.1 — Honest failures without .NET, and the right DLL (2026-11-06)
+
+- **No .NET SDK no longer crashes the audit.** `subprocess.run(["dotnet", ...])` raised `FileNotFoundError` from the
+  reader, which surfaced as an uncaught error in every packaging test on a machine without the SDK. Launch failures
+  and timeouts are now translated into `ToolchainMissing`, and the audit records `assembly.status = "unavailable"`
+  without touching its other findings. Verified by running the whole suite with `dotnet` removed from `PATH`:
+  191 tests, 5 skipped, no errors.
+- **A malformed managed assembly stays a real error.** The reader being available and refusing the file is reported
+  as `assembly.status = "invalid"` and fails the audit; only a missing toolchain is advisory. A cheap `BSJB`
+  pre-filter decides whether to invoke the reader at all, so a stub file is "skipped" rather than called malformed.
+- **The audit inspects the DLL the build produced, not whichever is newest.** Selection order: the build receipt's
+  `assembly` path (must be inside the project), then the project directory name, then the manifest name, then a sole
+  candidate. Two unexplained assemblies are refused with a reason instead of being guessed at. Reproduced the
+  reported case — a newer unrelated DLL next to the real one — and it is never selected now.
+- **The reader binary can no longer go stale.** A `.source-sha256` stamp over `Program.cs` and the project file is
+  written after a build; a changed reader rebuilds on next use, an unchanged one is reused.
+- 12 assembly tests (was 8) covering selection, ambiguity, missing toolchain, launch failure, invalid assembly and
+  cache freshness.
+
 # 1.14.0 — The compiled assembly decides R2API dependencies (2026-11-06)
 
 - `forge audit` now reads the built DLL's assembly references with `System.Reflection.Metadata`
