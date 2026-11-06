@@ -256,8 +256,9 @@ class CoreTests(unittest.TestCase):
 
     def test_audit_rejects_audio_event_missing_from_map(self):
         mod = self._audit_mod([], 'class P { void A() { Play("Play_vo_Real"); Play("Play_vo_Missing"); } }')
-        (mod / "package" / "assets").mkdir(parents=True, exist_ok=True)
-        (mod / "package" / "assets" / "events.txt").write_text("# key=files\nPlay_vo_Real=1.wav\n", encoding="utf-8")
+        (mod / "content" / "assets").mkdir(parents=True, exist_ok=True)
+        (mod / "content" / "assets" / "events.txt").write_text("# key=files\nPlay_vo_Real=1.wav\n", encoding="utf-8")
+        (mod / "content" / "assets" / "1.wav").write_bytes(b"RIFF")
         result = core.audit_project(mod)
         self.assertFalse(result["valid"])
         self.assertEqual(len(result["errors"]), 1)

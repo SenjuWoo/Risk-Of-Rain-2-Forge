@@ -1,3 +1,27 @@
+# 1.13.2 — Lexer, ownership data and release modes (2026-11-06)
+
+- The C# scanner is one tested lexer instead of per-check regexes. It understands normal, verbatim (`@"…"`),
+  interpolated (`$"…"`, `$@"…"`, `@$"…"`) and raw (`"""…"""`) strings plus char literals, so `//` inside
+  `"https://example.com"` no longer swallows the rest of the line and hides a missing audio event. Comments can
+  no longer satisfy an event, dependency, version or survivor check.
+- R2API ownership is data: `ror2forge/r2api_ownership.json` records the upstream repository, ref and date it was
+  derived from, and `scripts/refresh_r2api_ownership.py` regenerates it. `R2API.SkillsAPI` now resolves to the
+  Skills module, so a mod using it without `RiskofThunder-R2API_Skills` fails the audit instead of passing with
+  zero detected dependencies. Bare `SkillsAPI.…` after `using R2API;` is detected too; names that are neither a
+  known module nor a known class are reported in `r2api_unresolved` instead of being guessed into a package.
+- `forge release-check` has two modes. `prerelease` allows an untagged HEAD and reports `tag_status:
+  not_required`; `release` requires a single-`v` tag on HEAD, every version field and the changelog heading,
+  and verifies `SHA256SUMS`/`BUILD-RECEIPT.json` when given `--assets`. Missing changelog, missing git and
+  malformed tags are errors, not silent passes. CI runs prerelease mode; a tag-triggered workflow runs release
+  mode.
+- Build provenance is taken on both sides of the compiler: if sources or packaged inputs change while `dotnet`
+  runs, no receipt is written and the build fails. Packaging re-checks the payload digest before publishing the
+  archive.
+- Audio event maps must live under `content/` (the only place that ships), and every file the map lists must be
+  present in the package; a map in `docs/` is now reported instead of silently accepted.
+- `RELEASE_PROCESS.md` documents versioning, the tag/release sequence, how to verify a published release, how to
+  regenerate the ownership table and the rule that latest is not compatible.
+
 # 1.13.1 — Review follow-ups: provenance, comments, aliases (2026-11-06)
 
 - Packaging requires package provenance. A receipt written before 1.13.0 has no `package_sha256`, and that

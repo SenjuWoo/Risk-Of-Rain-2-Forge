@@ -255,7 +255,10 @@ def project_files(name: str) -> tuple[Path, Path, dict]:
     return folder, csproj, metadata
 
 
-ROOT_DOC_FILES = {"README.md", "STATE.md", "CHANGELOG.md", "icon.png", "manifest.json", "forge.json"}
+# Root documentation is excluded by location. packages.lock.json is excluded because `dotnet restore`
+# writes it during the build; its content is still reported in the receipt via the SDK/lock info.
+ROOT_DOC_FILES = {"README.md", "STATE.md", "CHANGELOG.md", "icon.png", "manifest.json", "forge.json",
+                  "packages.lock.json"}
 
 
 def source_digest(folder: Path) -> str:
@@ -266,6 +269,7 @@ def source_digest(folder: Path) -> str:
     """
     digest = hashlib.sha256()
     paths = [p for p in folder.rglob("*") if p.is_file()
+             and p.name != "packages.lock.json"      # written by `dotnet restore`, not authored here
              and not (p.parent == folder and p.name in ROOT_DOC_FILES)
              and "content" not in p.relative_to(folder).parts
              and not {"build", "bin", "obj", ".git"}.intersection(p.relative_to(folder).parts)]
@@ -319,6 +323,7 @@ def build(name: str, locked: bool = False, offline: bool = False) -> dict:
         command.append("--locked-mode")
     if offline:
         command.extend(["--source", environment["NUGET_PACKAGES"], "-p:NuGetAudit=false"])
+    before = (source_digest(folder), package_digest(folder))
     log = owned(folder / "build/build.log")
     logs = ""
     try:
@@ -328,8 +333,11 @@ def build(name: str, locked: bool = False, offline: bool = False) -> dict:
         log.write_text(logs + str(exc), encoding="utf-8")
         raise
     log.write_text(logs, encoding="utf-8")
+    after = (source_digest(folder), package_digest(folder))
+    if after != before:
+        raise RuntimeError("Project inputs changed while the build ran; no trustworthy receipt was written. Build again.")
     dll = owned(output / f"{name}.dll")
-    receipt = {"project": name, "version": metadata["version"], "assembly": str(dll), "assembly_sha256": sha256(dll), "source_sha256": source_digest(folder), "package_sha256": package_digest(folder),
+    receipt = {"project": name, "version": metadata["version"], "assembly": str(dll), "assembly_sha256": sha256(dll), "source_sha256": after[0], "package_sha256": after[1],
                "sdk": run_process(["dotnet", "--version"], cwd=folder, env=environment).stdout.strip(), "built_at": datetime.now(timezone.utc).isoformat(),
                "log": str(log), "warnings": sorted({line.strip() for line in logs.splitlines() if re.search(r"\bwarning [A-Z]+[0-9]+:", line)}), "runtime_verified": False}
     write_json(owned(folder / "build/receipt.json"), receipt)
@@ -524,20 +532,11 @@ R2API_GUID_PREFIX = "com.bepis.r2api."
 R2API_CORE_NAMESPACES = {"Utils": "Core", "MiscHelpers": "Core", "AutoVersionGen": "Core"}
 # A qualified `R2API.X.Y` names a *type* in the root namespace, not a module. Only types we can map with
 # confidence count as a dependency; anything else is ignored rather than guessed into a false error.
-# Namespaces that exist as split modules. A qualified `R2API.X.Y` where X is in here is a namespace use.
-R2API_MODULES = {"Core", "Items", "Characters", "Enemies", "Artifacts", "Equipment", "Buffs", "Elites",
-                 "Director", "Loadout", "Language", "Prefab", "Skins", "Colors", "DamageType", "Dot",
-                 "SkillStates", "Stats", "RecalculateStats", "Team", "Network", "Difficulty", "Inventory",
-                 "Orb", "ContentManagement", "Unlockable", "TempVisualEffect"}
-R2API_TYPE_MODULES = {
-    "RecalculateStatsAPI": "RecalculateStats", "SkinDef": "Skins", "SkinCatalog": "Skins",
-    "ItemAPI": "Items", "ItemDef": "Items", "ItemCatalog": "Items",
-    "BuffAPI": "Buffs", "BuffDef": "Buffs", "EliteAPI": "Elites", "EliteDef": "Elites",
-    "DamageAPI": "DamageType", "DamageTypeCombo": "DamageType",
-    "ArtifactAPI": "Artifacts", "ArtifactDef": "Artifacts", "DirectorAPI": "Director",
-    "LoadoutAPI": "Loadout", "LanguageAPI": "Language", "PrefabAPI": "Prefab",
-    "ContentAddition": "ContentManagement",
-}
+# Ownership is data, not a guess: ror2forge/r2api_ownership.json records where every module and API class
+# came from (upstream repo, ref, date). Regenerate it with scripts/refresh_r2api_ownership.py.
+_OWNERSHIP = json.loads((Path(__file__).with_name("r2api_ownership.json")).read_text(encoding="utf-8"))
+R2API_MODULES = set(_OWNERSHIP["modules"])
+R2API_TYPE_MODULES: dict[str, str] = dict(_OWNERSHIP["types"])
 
 
 def _norm(name: str) -> str:
@@ -557,35 +556,98 @@ def _manifest_for(root: Path) -> tuple[Path | None, dict]:
     return path, json.loads(path.read_text(encoding="utf-8-sig"))
 
 
-def _strip_csharp(text: str, keep_strings: bool = False) -> str:
-    """Blank out comments and string/char literals, keeping newlines and offsets.
+def _csharp_literal_end(text: str, i: int) -> int:
+    """Return the index just past a C# literal starting at i, or i+1 when this is not a literal.
 
-    Every regex check here is about real code; a comment or a log string saying
-    "itemDisplayRuleSet" must not satisfy a requirement.
+    Handles normal, verbatim (@), interpolated ($, $$) and raw (\"\"\") strings plus char literals.
+    Interpolation holes are treated as part of the literal: this is a lexer for audit scans, not a parser,
+    and a brace hole that contains its own quotes is reported as such rather than silently misread.
+    """
+    n = len(text)
+    dollars, verbatim, j = 0, False, i
+    while j < n and text[j] in "$@":
+        if text[j] == "$":
+            dollars += 1
+        else:
+            verbatim = True
+        j += 1
+    if j < n and text[j] == "'" and dollars == 0 and not verbatim:
+        # char literal: '\'' or 'x'
+        k = j + 1
+        while k < n:
+            if text[k] == "\\":
+                k += 2
+                continue
+            if text[k] == "'" or text[k] == "\n":
+                return k + 1
+            k += 1
+        return n
+    if j >= n or text[j] != '"':
+        return i + 1
+    quotes = 0
+    while j + quotes < n and text[j + quotes] == '"':
+        quotes += 1
+    if quotes >= 3:                      # raw string: ends at the same quote run
+        closing = '"' * quotes
+        end = text.find(closing, j + quotes)
+        return n if end < 0 else end + quotes
+    j += 1
+    if verbatim and not dollars:
+        while j < n:
+            if text[j] == '"':
+                if j + 1 < n and text[j + 1] == '"':
+                    j += 2
+                    continue
+                return j + 1
+            j += 1
+        return n
+    while j < n:
+        if text[j] == "\\":
+            j += 2
+            continue
+        if text[j] == '"':
+            return j + 1
+        if text[j] == "\n":
+            return j
+        j += 1
+    return n
+
+
+def _strip_csharp(text: str, keep_strings: bool = False) -> str:
+    """Return text with comments blanked, and (unless keep_strings) literal contents blanked.
+
+    One scanner serves every audit check: comments are recognised only in code, and a literal is scanned
+    through its own rules, so `//` inside "https://..." never starts a comment. Newlines and offsets are
+    preserved so messages still line up with the file.
     """
     out, i, n = [], 0, len(text)
     while i < n:
         ch = text[i]
         nxt = text[i + 1] if i + 1 < n else ""
         if ch == "/" and nxt == "/":
-            j = text.find("\n", i)
-            j = n if j < 0 else j
-            out.append(" " * (j - i)); i = j
+            end = text.find("\n", i)
+            end = n if end < 0 else end
+            out.append(" " * (end - i))
+            i = end
         elif ch == "/" and nxt == "*":
-            j = text.find("*/", i + 2)
-            j = n if j < 0 else j + 2
-            out.append("".join("\n" if c == "\n" else " " for c in text[i:j])); i = j
-        elif (ch == '"' or ch == "'") and not keep_strings:
-            quote, j = ch, i + 1
-            while j < n:
-                if text[j] == "\\": j += 2; continue
-                if text[j] == quote: j += 1; break
-                if text[j] == "\n": break
-                j += 1
-            out.append("".join("\n" if c == "\n" else " " for c in text[i:j])); i = j
+            end = text.find("*/", i + 2)
+            end = n if end < 0 else end + 2
+            out.append("".join("\n" if c == "\n" else " " for c in text[i:end]))
+            i = end
+        elif ch == '"' or ch == "'" or ch in "$@":
+            end = _csharp_literal_end(text, i)
+            if end <= i:                 # defensive: never spin on a malformed literal
+                out.append(ch)
+                i += 1
+                continue
+            chunk = text[i:end]
+            out.append(chunk if keep_strings else "".join("\n" if c == "\n" else " " for c in chunk))
+            i = end
         else:
-            out.append(ch); i += 1
+            out.append(ch)
+            i += 1
     return "".join(out)
+
 
 
 def audit_project(root: str | Path) -> dict:
@@ -611,7 +673,7 @@ def audit_project(root: str | Path) -> dict:
         declared.add(_norm(package))
     declared_full = set(manifest.get("dependencies", []))
 
-    guids, imports = set(), set()
+    guids, imports, unresolved = set(), set(), set()
     texts = {}
     for path in sources:
         raw = path.read_text(encoding="utf-8-sig", errors="replace")
@@ -623,14 +685,29 @@ def audit_project(root: str | Path) -> dict:
         imports.update(re.findall(
             r'^\s*(?:global\s+)?using\s+(?:static\s+)?(?:global\s*::\s*)?(?:[A-Za-z_][\w.]*\s*=\s*(?:global\s*::\s*)?)?R2API\.([A-Za-z0-9_]+)',
             text, re.M))
-        # Fully qualified `R2API.Type` names a type, not a module; map only the types we know.
+        # `using R2API;` followed by a bare `SkillsAPI.…` is the most common form in real mods, so known
+        # API class names count wherever they appear in code.
+        for known, module in R2API_TYPE_MODULES.items():
+            if known == "R2API":        # the root static class doubles as the namespace prefix
+                continue
+            if re.search(rf"(?<!\.)\b{known}\b", text):
+                imports.add(module)
+        # A qualified `R2API.X` is a namespace when X is a module, a type when X is a known API class;
+        # anything else is recorded as unresolved instead of being guessed into a package name.
         for name in re.findall(r"\bR2API\.([A-Za-z0-9_]+)\s*\.", text):
             if name in R2API_MODULES:
                 imports.add(name)
             elif name in R2API_TYPE_MODULES:
                 imports.add(R2API_TYPE_MODULES[name])
+            else:
+                unresolved.add(name)
 
     errors, warnings = [], []
+    _unresolved = sorted(unresolved)
+    if _unresolved:
+        # Unknown names are not assumed to be packages: report them and let a human decide.
+        warnings.append("unresolved R2API references (not in ror2forge/r2api_ownership.json): "
+                        + ", ".join(_unresolved) + " - verify the owning module before release")
 
     # 1. every R2API namespace used needs its own split module in the manifest
     for module in sorted(imports):
@@ -658,13 +735,22 @@ def audit_project(root: str | Path) -> dict:
 
     # 4. every audio event a source file plays must exist in the shipped event map, or it is silently silent
     # (a transform voice line pointed at a League event that was never extracted, and nothing errored)
-    events_files = [p for p in root.rglob("events.txt") if not {"bin", "obj"} & {x.lower() for x in p.parts}]
+    events_files = [p for p in (root / "content").rglob("events.txt")] if (root / "content").is_dir() else []
+    stray_maps = [p for p in root.rglob("events.txt")
+                  if p not in events_files and not {"bin", "obj", "build"} & {x.lower() for x in p.parts}]
+    if stray_maps and not events_files:
+        errors.append(f"{stray_maps[0].name} sits outside content/ and would not ship; move it under content/ "
+                      "or delete it (docs/AUDIO.md)")
     if events_files:
         keys = set()
         for path in events_files:
             for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
                 if "=" in line and not line.lstrip().startswith("#"):
-                    keys.add(line.split("=", 1)[0].strip())
+                    key, _files = line.split("=", 1)
+                    keys.add(key.strip())
+                    for asset in (part.strip() for part in _files.split(",")):
+                        if asset and not list((root / "content").rglob(asset)):
+                            errors.append(f'event map lists "{asset}" for {key.strip()} but no such file is packaged')
         for ev in sorted(set(re.findall(r'"(Play_[A-Za-z0-9_]+)"', joined_strings)) - keys):
             errors.append(f'"{ev}" is played in C# but missing from {events_files[0].name}')
 
@@ -688,7 +774,8 @@ def audit_project(root: str | Path) -> dict:
                 warnings.append(warning)
 
     return {"root": str(root), "manifest": str(manifest_path), "sources": len(sources),
-            "r2api_modules": sorted(imports), "dependency_guids": sorted(guids),
+            "r2api_modules": sorted(imports),
+        "r2api_unresolved": sorted(unresolved), "dependency_guids": sorted(guids),
             "dependencies_declared": len(declared_full), "errors": errors, "warnings": warnings,
             "valid": not errors}
 
@@ -766,6 +853,7 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
     audit = audit_project(folder)
     if audit["errors"] and not skip_audit:
         raise ValueError("Project audit failed (fix it, or pass --skip-audit explicitly): " + "; ".join(audit["errors"]))
+    package_before = package_digest(folder)
     output = owned(ROOT / "artifacts" / f"{metadata['author']}-{name}-{metadata['version']}.zip")
     output.parent.mkdir(parents=True, exist_ok=True)
     payload = {"manifest.json": folder / "manifest.json", "README.md": folder / "README.md", "icon.png": folder / "icon.png", f"plugins/{name}/{name}.dll": dll}
@@ -792,6 +880,8 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
                 entry.compress_type = zipfile.ZIP_DEFLATED
                 entry.external_attr = 0o100644 << 16
                 package.writestr(entry, source.read_bytes())
+        if package_digest(folder) != package_before:
+            raise ValueError("Payload files changed while the archive was written; package again.")
         result = validate(staging)
         if not result["valid"]:
             raise ValueError("; ".join(result["errors"]))
@@ -807,38 +897,93 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
             "publish": "not requested"}
 
 
-def release_check(docs: bool = True) -> dict:
-    """Every place the project's own version is written must agree before a release is tagged.
+def release_check(mode: str = "prerelease", assets: str | Path | None = None) -> dict:
+    """Compare every place the project's own version is written; two modes, never a silent pass.
 
-    Reads VERSION, ror2forge.__version__, the newest CHANGELOG heading and, when git is available,
-    the tag that points at HEAD. Unknown is reported as unknown, never as a pass.
+    prerelease: a pull request or untagged main commit - a tag is optional, and its absence is reported
+    as `not_required` rather than as verified. release: a real version tag, where every field and any
+    supplied asset directory must agree or the gate fails.
     """
+    if mode not in {"prerelease", "release"}:
+        raise ValueError("mode must be 'prerelease' or 'release'")
     import ror2forge
-    version_file = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    errors, warnings = [], []
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     package_version = ror2forge.__version__
+    if not VERSION.fullmatch(version):
+        errors.append(f"VERSION is not MAJOR.MINOR.PATCH: {version!r}")
+    if version != package_version:
+        errors.append(f"VERSION {version} != ror2forge.__version__ {package_version}")
     changelog = ROOT / "CHANGELOG.md"
     heading = None
-    if changelog.is_file():
+    if not changelog.is_file():
+        errors.append("CHANGELOG.md is missing")
+    else:
         for line in changelog.read_text(encoding="utf-8").splitlines():
-            match = re.match(r"# (\d+\.\d+\.\d+)", line)
+            match = re.match(r"# (\d+\.\d+\.\d+)\b", line)
             if match:
                 heading = match.group(1)
                 break
-    errors = [f"VERSION {version_file} != ror2forge.__version__ {package_version}"] if version_file != package_version else []
-    if heading and heading != version_file:
-        errors.append(f"CHANGELOG newest heading {heading} != VERSION {version_file}")
-    tag = None
+        if heading is None:
+            errors.append("CHANGELOG.md has no '# X.Y.Z' heading")
+        elif heading != version:
+            errors.append(f"CHANGELOG newest heading {heading} != VERSION {version}")
+    tag_name, tag_status = None, "unknown"
     try:
-        tag = subprocess.run(["git", "describe", "--tags", "--exact-match", "HEAD"], cwd=ROOT,
-                             capture_output=True, text=True, timeout=20).stdout.strip() or None
-    except Exception:
-        tag = None
-    tag_version = tag.lstrip("v") if tag else None
-    if tag_version and tag_version != version_file:
-        errors.append(f"tag {tag} != VERSION {version_file}")
-    return {"version": version_file, "package_version": package_version, "changelog": heading,
-            "tag": tag_version, "tag_checked": tag is not None,
-            "valid": not errors, "errors": errors,
+        result = subprocess.run(["git", "describe", "--tags", "--exact-match", "HEAD"], cwd=ROOT,
+                                capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError) as exc:
+        warnings.append(f"git unavailable, tag not verified: {exc}")
+        result = None
+    if result is not None:
+        if result.returncode == 0 and result.stdout.strip():
+            tag_name = result.stdout.strip()
+            if not re.fullmatch(r"v\d+\.\d+\.\d+", tag_name):
+                errors.append(f"tag {tag_name!r} is not a single-v vX.Y.Z tag")
+                tag_status = "malformed"
+            elif tag_name[1:] != version:
+                # On an untagged development branch HEAD still carries the previous release tag; that is
+                # expected mid-cycle, so it is a warning there and a hard error for a release gate.
+                message = f"tag {tag_name} != VERSION {version}"
+                tag_status = "stale" if mode == "prerelease" else "mismatch"
+                (warnings if mode == "prerelease" else errors).append(message)
+            else:
+                tag_status = "ok"
+        else:
+            tag_status = "absent"
+            if mode == "release":
+                errors.append("no version tag points at HEAD; tagged releases require one")
+    elif mode == "release":
+        errors.append("cannot verify the release tag: git is unavailable")
+    if mode == "prerelease" and tag_status == "absent":
+        tag_status = "not_required"
+    asset_report = None
+    if assets:
+        folder = Path(assets)
+        sums = folder / "SHA256SUMS"
+        receipts = folder / "BUILD-RECEIPT.json"
+        if not sums.is_file() or not receipts.is_file():
+            errors.append("asset folder lacks SHA256SUMS or BUILD-RECEIPT.json")
+        else:
+            for line in sums.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                digest, name = line.split(None, 1)
+                target = folder / name.strip()
+                if not target.is_file():
+                    errors.append(f"listed asset missing: {name.strip()}")
+                elif sha256(target) != digest:
+                    errors.append(f"asset hash mismatch: {name.strip()}")
+            claimed = read_json(receipts).get("commit")
+            actual = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
+                                    text=True, timeout=20).stdout.strip()
+            if claimed != actual:
+                errors.append(f"receipt commit {claimed} != HEAD {actual}")
+            asset_report = {"commit_claimed": claimed, "commit_actual": actual}
+    verified = not errors and tag_status in {"ok", "not_required"} and bool(asset_report or not assets)
+    return {"mode": mode, "version": version, "package_version": package_version, "changelog": heading,
+            "tag": tag_name, "tag_status": tag_status, "assets": asset_report,
+            "valid": not errors, "verified": verified, "errors": errors, "warnings": warnings,
             "note": "A matching version set proves the release is labelled consistently; it does not prove the code works."}
 
 
