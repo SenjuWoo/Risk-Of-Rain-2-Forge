@@ -1,6 +1,6 @@
 # Risk of Rain 2 Forge — verified handoff
 
-- Version: **1.13.3** — project-scoped input validation (links/junctions rejected), packaging from a verified in-memory snapshot with archive read-back, strict release asset verification with separate checks, lock file hashed into the receipt, log access restricted to real logs, procedural template covered by CI smoke and MCP. 161 tests (3 skipped: link privileges).
+- Version: **1.13.4** — project-scoped input validation, snapshot packaging, strict published-asset verification in a post-publication workflow, lock hashed into the receipt, log access restricted, procedural template covered. 161 tests (3 skipped locally where links cannot be created).
 - Goal: give any agent current tools, exact API inspection, tested templates and an efficient modding playbook.
 - User preference: CLI by default. MCP is optional, unregistered globally and never auto-started. No personal agent config/model choices changed.
 - Entry: `forge.cmd doctor`, `forge.cmd guide`, `AGENTS.md`. Source modules in ror2forge/, templates in templates/, reusable skill in skills/ror2-forge/.
