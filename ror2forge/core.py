@@ -255,10 +255,20 @@ def project_files(name: str) -> tuple[Path, Path, dict]:
     return folder, csproj, metadata
 
 
+ROOT_DOC_FILES = {"README.md", "STATE.md", "CHANGELOG.md", "icon.png", "manifest.json", "forge.json"}
+
+
 def source_digest(folder: Path) -> str:
+    """Digest of what the compiler reads: sources and build props, not docs or packaged assets.
+
+    Root documentation is excluded by *location*; a same-named file under content/ is a runtime
+    asset and must change the digest when it changes.
+    """
     digest = hashlib.sha256()
-    excluded = {"README.md", "STATE.md", "CHANGELOG.md", "icon.png", "manifest.json", "forge.json"}
-    paths = [p for p in folder.rglob("*") if p.is_file() and p.name not in excluded and not {"build", "bin", "obj", ".git"}.intersection(p.relative_to(folder).parts)]
+    paths = [p for p in folder.rglob("*") if p.is_file()
+             and not (p.parent == folder and p.name in ROOT_DOC_FILES)
+             and "content" not in p.relative_to(folder).parts
+             and not {"build", "bin", "obj", ".git"}.intersection(p.relative_to(folder).parts)]
     for parent in (folder, *folder.parents):
         paths.extend(parent / name for name in ("Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "NuGet.Config", "global.json") if (parent / name).is_file())
     for path in paths:
@@ -266,6 +276,24 @@ def source_digest(folder: Path) -> str:
             owned(path)
     for path in sorted(set(paths)):
         digest.update(str(path).replace("\\", "/").encode())
+        digest.update(bytes.fromhex(sha256(path)))
+    return digest.hexdigest()
+
+
+def package_digest(folder: Path) -> str:
+    """Digest of the packaged inputs (metadata, icon, README, content, licences).
+
+    Kept separate from source_digest so a content or manifest change invalidates packaging
+    provenance without pretending the compiled assembly changed.
+    """
+    digest = hashlib.sha256()
+    names = {"manifest.json", "README.md", "icon.png", "LICENSE", "LICENSE.txt", "LICENSE.md"}
+    paths = [p for p in folder.rglob("*")
+             if p.is_file()
+             and not {"build", "bin", "obj", ".git"}.intersection(p.relative_to(folder).parts)
+             and (p.parent == folder and p.name in names or "content" in p.relative_to(folder).parts)]
+    for path in sorted(set(paths)):
+        digest.update(str(path.relative_to(folder)).replace("\\", "/").encode())
         digest.update(bytes.fromhex(sha256(path)))
     return digest.hexdigest()
 
@@ -301,7 +329,7 @@ def build(name: str, locked: bool = False, offline: bool = False) -> dict:
         raise
     log.write_text(logs, encoding="utf-8")
     dll = owned(output / f"{name}.dll")
-    receipt = {"project": name, "version": metadata["version"], "assembly": str(dll), "assembly_sha256": sha256(dll), "source_sha256": source_digest(folder),
+    receipt = {"project": name, "version": metadata["version"], "assembly": str(dll), "assembly_sha256": sha256(dll), "source_sha256": source_digest(folder), "package_sha256": package_digest(folder),
                "sdk": run_process(["dotnet", "--version"], cwd=folder, env=environment).stdout.strip(), "built_at": datetime.now(timezone.utc).isoformat(),
                "log": str(log), "warnings": sorted({line.strip() for line in logs.splitlines() if re.search(r"\bwarning [A-Z]+[0-9]+:", line)}), "runtime_verified": False}
     write_json(owned(folder / "build/receipt.json"), receipt)
@@ -513,6 +541,37 @@ def _manifest_for(root: Path) -> tuple[Path | None, dict]:
     return path, json.loads(path.read_text(encoding="utf-8-sig"))
 
 
+def _strip_csharp(text: str, keep_strings: bool = False) -> str:
+    """Blank out comments and string/char literals, keeping newlines and offsets.
+
+    Every regex check here is about real code; a comment or a log string saying
+    "itemDisplayRuleSet" must not satisfy a requirement.
+    """
+    out, i, n = [], 0, len(text)
+    while i < n:
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+        if ch == "/" and nxt == "/":
+            j = text.find("\n", i)
+            j = n if j < 0 else j
+            out.append(" " * (j - i)); i = j
+        elif ch == "/" and nxt == "*":
+            j = text.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            out.append("".join("\n" if c == "\n" else " " for c in text[i:j])); i = j
+        elif (ch == '"' or ch == "'") and not keep_strings:
+            quote, j = ch, i + 1
+            while j < n:
+                if text[j] == "\\": j += 2; continue
+                if text[j] == quote: j += 1; break
+                if text[j] == "\n": break
+                j += 1
+            out.append("".join("\n" if c == "\n" else " " for c in text[i:j])); i = j
+        else:
+            out.append(ch); i += 1
+    return "".join(out)
+
+
 def audit_project(root: str | Path) -> dict:
     """Cross-check C# R2API usage and BepInDependency GUIDs against the package manifest."""
     root = Path(root).resolve()
@@ -537,10 +596,18 @@ def audit_project(root: str | Path) -> dict:
     declared_full = set(manifest.get("dependencies", []))
 
     guids, imports = set(), set()
+    texts = {}
     for path in sources:
-        text = path.read_text(encoding="utf-8-sig", errors="replace")
-        guids.update(re.findall(r'\[BepInDependency\(\s*"([^"]+)"', text))
-        imports.update(re.findall(r'^using\s+R2API\.([A-Za-z0-9_]+)\s*;', text, re.M))
+        raw = path.read_text(encoding="utf-8-sig", errors="replace")
+        text = _strip_csharp(raw)
+        texts[path] = text
+        # Attributes carry the GUID inside a string literal, so keep literals for this one scan.
+        guids.update(re.findall(r'\[BepInDependency\(\s*"([^"]+)"', _strip_csharp(raw, keep_strings=True)))
+        # using R2API.X;  global using R2API.X;  using Alias = R2API.X.Y;  using static R2API.X.Y;
+        imports.update(re.findall(
+            r'^\s*(?:global\s+)?using\s+(?:static\s+)?(?:[A-Za-z_][\w.]*\s*=\s*)?R2API\.([A-Za-z0-9_]+)', text, re.M))
+        # Fully qualified use without any using directive still needs the assembly.
+        imports.update(re.findall(r'\bR2API\.([A-Za-z0-9_]+)\s*\.', text))
 
     errors, warnings = [], []
 
@@ -578,7 +645,9 @@ def audit_project(root: str | Path) -> dict:
 
     # 5. the manifest, csproj and plugin attribute must carry one version (three places drift apart by hand)
     version = manifest.get("version_number")
-    for csproj in [p for p in root.rglob("*.csproj") if not {"bin", "obj"} & {x.lower() for x in p.parts}]:
+    # build/ holds version backups and intermediate output; a stale copy there is not the project.
+    for csproj in [p for p in root.rglob("*.csproj")
+                   if not {"bin", "obj", "build"} & {x.lower() for x in p.parts}]:
         found = ET.parse(csproj).findtext(".//Version")
         if found and version and found != version:
             errors.append(f"{csproj.name} <Version> {found} != manifest version_number {version}")
@@ -587,7 +656,11 @@ def audit_project(root: str | Path) -> dict:
             errors.append(f'C# version constant "{literal}" != manifest version_number {version}')
 
     # 6-9. survivor polish that compiles, validates and plays, so nothing else catches it (Ultron 1.1.2/1.2.0 audit)
-    warnings.extend(survivor_warnings(joined))
+    # Evaluated per file: a correct pattern in one file must not excuse a wrong one in another.
+    for text in texts.values():
+        for warning in survivor_warnings(text):
+            if warning not in warnings:
+                warnings.append(warning)
 
     return {"root": str(root), "manifest": str(manifest_path), "sources": len(sources),
             "r2api_modules": sorted(imports), "dependency_guids": sorted(guids),
@@ -636,7 +709,7 @@ def plugin_version_declaration(source: str) -> re.Match:
     return declarations[0]
 
 
-def package_mod(name: str) -> dict:
+def package_mod(name: str, skip_audit: bool = False) -> dict:
     folder, csproj, metadata = project_files(name)
     safe_name(metadata["author"])
     if not VERSION.fullmatch(metadata["version"]):
@@ -654,6 +727,14 @@ def package_mod(name: str) -> dict:
         raise ValueError("PluginVersion must agree with the package version.")
     if receipt.get("source_sha256") != source_digest(folder) or receipt.get("assembly_sha256") != sha256(dll):
         raise ValueError("Source or DLL changed since the successful build; build again before packaging.")
+    if "package_sha256" in receipt and receipt["package_sha256"] != package_digest(folder):
+        raise ValueError("Manifest, README, icon or content/ changed since the successful build; build again before packaging.")
+
+    # Release preflight: a package must never ship with the audit's blocking findings outstanding.
+    # Warnings stay advisory; skipping the audit is allowed but reported in the result.
+    audit = audit_project(folder)
+    if audit["errors"] and not skip_audit:
+        raise ValueError("Project audit failed (fix it, or pass --skip-audit explicitly): " + "; ".join(audit["errors"]))
     output = owned(ROOT / "artifacts" / f"{metadata['author']}-{name}-{metadata['version']}.zip")
     output.parent.mkdir(parents=True, exist_ok=True)
     payload = {"manifest.json": folder / "manifest.json", "README.md": folder / "README.md", "icon.png": folder / "icon.png", f"plugins/{name}/{name}.dll": dll}
@@ -688,7 +769,11 @@ def package_mod(name: str) -> dict:
         os.replace(staging, output)
     finally:
         staging.unlink(missing_ok=True)
-    return {**result, "archive": str(output), "build_receipt": str(folder / "build/receipt.json"), "publish": "not requested"}
+    return {**result, "archive": str(output), "build_receipt": str(folder / "build/receipt.json"),
+            "audit": {"errors": audit["errors"], "warnings": audit["warnings"], "skipped": skip_audit},
+            "runtime_verified": False,
+            "note": "A valid archive proves packaging only; it does not show that the mod loads or works in game.",
+            "publish": "not requested"}
 
 
 def logs(path: str | None = None, lines: int = 250) -> dict:

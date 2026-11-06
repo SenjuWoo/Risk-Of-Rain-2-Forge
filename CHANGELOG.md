@@ -1,3 +1,27 @@
+# 1.13.0 — Release preflight and honest validation (2026-11-06)
+
+- `forge package` runs the project audit first and refuses to build an archive while it reports blocking
+  findings. `--skip-audit` still exists for a deliberate override, and the package result records
+  `audit.errors`, `audit.warnings` and `skipped`, so a bypass is visible in the output instead of silent.
+  The result also states that a valid archive proves packaging only.
+- `forge audit` reads C# through a comment/string stripper and understands `global using R2API.X;`,
+  `using Alias = R2API.X.Y;`, `using static R2API.X.Y;` and fully qualified `R2API.X.` references. The
+  earlier `^using` regex missed all of those, and a commented-out using could be counted as a dependency.
+  Attributes still resolve their GUIDs from string literals, so `[BepInDependency("com.bepis.r2api.skins")]`
+  keeps working.
+- Survivor warnings are evaluated per source file. A correct `Apply(false, true)` in one file no longer
+  silences a `LoadImage(..., false)` leak in another, and a comment mentioning `itemDisplayRuleSet` no longer
+  suppresses the missing-rule-set warning.
+- `source_digest` excludes documentation by *location*: the root `README.md`, `STATE.md`, `CHANGELOG.md`,
+  `icon.png`, `manifest.json` and `forge.json` are ignored, while `content/README.md` now counts. A new
+  `package_digest` covers the packaged inputs (manifest, README, icon, content, licences) and is written into
+  `build/receipt.json`; packaging refuses a payload that changed after the build.
+- The version cross-check ignores `build/`, so the csproj copy that `forge bump` keeps in
+  `build/version-backups` can no longer be mistaken for the project version (it made the new preflight refuse
+  a correctly bumped project).
+- `tests/test_audit_regressions.py` adds eleven regression tests for the above, including two adversarial
+  cases (a comment that mimics a fix, and a foreign file with the compensating call).
+
 # 1.12.2 — Cloth on a baked rig (2026-11-04)
 
 - `docs/RUNTIME.md` gains "Cloth on a baked rig": drive the cloth bones yourself in `LateUpdate` (`DefaultExecutionOrder` above the animation driver) from ground speed, vertical speed and turn rate, in world space, with the swing falling off by chain depth; and give the cloth a visible inside by appending a reversed-winding, flipped-normal copy of every submesh weighted to cloth bones. Measured on Odinforce Ultron's cape (3,222 -> 6,444 and 14,493 -> 28,986 vertices) with the outside unchanged.
