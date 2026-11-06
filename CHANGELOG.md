@@ -1,3 +1,12 @@
+# 1.13.7 — CI evidence counts only the checks that gate a release (2026-11-06)
+
+- `_ci_state` now evaluates an explicit `REQUIRED_CHECKS` set (`Windows tests and mod builds`, `CodeQL`). Release
+  workflows are excluded by construction, because a job cannot be required to observe its own conclusion: the
+  v1.13.6 publication read its own in-progress `Tagged release gate` and reported `ci: pending`, so a fully green
+  release looked unverified. Re-checked now, v1.13.6 verifies correctly.
+- Regression tests cover the self-reference case and a failing required check.
+- 169 tests.
+
 # 1.13.6 — Trustworthy release proof, hardlinks and bounded packaging (2026-11-06)
 
 - `release-check --mode release --assets` now refuses fabrications instead of trusting a matching checksum:
