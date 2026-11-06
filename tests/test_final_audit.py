@@ -261,7 +261,8 @@ class ReleaseModeTests(Fixture):
         with patch.object(core, "ROOT", self.root), patch("ror2forge.__version__", "1.2.3"),                 self._git(stdout="v1.2.3"):
             result = core.release_check("release")
         self.assertFalse(result["release_verified"])
-        self.assertTrue(any("--assets" in e for e in result["errors"]))
+        self.assertFalse(result["checks"]["assets"])
+        self.assertTrue(any("--assets" in w for w in result["warnings"]))
 
 
 class AudioMapTests(Fixture):

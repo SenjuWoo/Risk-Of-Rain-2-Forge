@@ -1,0 +1,27 @@
+name: Published release verification
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  published:
+    name: Download and verify published assets
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Download the published files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ github.event.release.tag_name || github.ref_name }}" --dir published
+      # The point of this job: verify the bytes users actually download, not a claim in the repository.
+      - name: Verify published bytes
+        run: python forge.py release-check --mode release --assets published

@@ -1,3 +1,14 @@
+# 1.13.4 — Separate the tag gate from published-asset proof (2026-11-06)
+
+- `release-check --mode release` without `--assets` no longer fails the tag gate: an unpublished tag has no
+  downloadable files, so the run reports `checks.assets: false`, `release_verified: false` and a warning instead
+  of an error. That is the honest state, and it keeps the tag workflow about labels and the tag about bytes.
+- New `release-published.yml` runs on `release: published` (and manually): it downloads the actual release files
+  and runs `release-check --mode release --assets published`, so a published release is verified by the bytes
+  users download. The tag workflow stays prepublication-only.
+- This is the fix for the v1.13.3 tag run, which failed because 1.13.3 introduced the asset requirement and the
+  tag workflow did not pass an asset folder. v1.13.3 stays published untouched.
+
 # 1.13.3 — Project isolation, package snapshots and real release verification (2026-11-06)
 
 - Packaged inputs are validated against their **own project**, not the whole forge workspace. A link or junction
