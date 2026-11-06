@@ -522,6 +522,22 @@ R2API_GUID_PREFIX = "com.bepis.r2api."
 # Namespaces that ship inside R2API.Core.dll rather than a split module of the same name (read from
 # R2API_Core 5.3.0); `using R2API.Utils;` for NetworkCompatibility needs R2API_Core, not an "R2API_Utils".
 R2API_CORE_NAMESPACES = {"Utils": "Core", "MiscHelpers": "Core", "AutoVersionGen": "Core"}
+# A qualified `R2API.X.Y` names a *type* in the root namespace, not a module. Only types we can map with
+# confidence count as a dependency; anything else is ignored rather than guessed into a false error.
+# Namespaces that exist as split modules. A qualified `R2API.X.Y` where X is in here is a namespace use.
+R2API_MODULES = {"Core", "Items", "Characters", "Enemies", "Artifacts", "Equipment", "Buffs", "Elites",
+                 "Director", "Loadout", "Language", "Prefab", "Skins", "Colors", "DamageType", "Dot",
+                 "SkillStates", "Stats", "RecalculateStats", "Team", "Network", "Difficulty", "Inventory",
+                 "Orb", "ContentManagement", "Unlockable", "TempVisualEffect"}
+R2API_TYPE_MODULES = {
+    "RecalculateStatsAPI": "RecalculateStats", "SkinDef": "Skins", "SkinCatalog": "Skins",
+    "ItemAPI": "Items", "ItemDef": "Items", "ItemCatalog": "Items",
+    "BuffAPI": "Buffs", "BuffDef": "Buffs", "EliteAPI": "Elites", "EliteDef": "Elites",
+    "DamageAPI": "DamageType", "DamageTypeCombo": "DamageType",
+    "ArtifactAPI": "Artifacts", "ArtifactDef": "Artifacts", "DirectorAPI": "Director",
+    "LoadoutAPI": "Loadout", "LanguageAPI": "Language", "PrefabAPI": "Prefab",
+    "ContentAddition": "ContentManagement",
+}
 
 
 def _norm(name: str) -> str:
@@ -605,9 +621,14 @@ def audit_project(root: str | Path) -> dict:
         guids.update(re.findall(r'\[BepInDependency\(\s*"([^"]+)"', _strip_csharp(raw, keep_strings=True)))
         # using R2API.X;  global using R2API.X;  using Alias = R2API.X.Y;  using static R2API.X.Y;
         imports.update(re.findall(
-            r'^\s*(?:global\s+)?using\s+(?:static\s+)?(?:[A-Za-z_][\w.]*\s*=\s*)?R2API\.([A-Za-z0-9_]+)', text, re.M))
-        # Fully qualified use without any using directive still needs the assembly.
-        imports.update(re.findall(r'\bR2API\.([A-Za-z0-9_]+)\s*\.', text))
+            r'^\s*(?:global\s+)?using\s+(?:static\s+)?(?:global\s*::\s*)?(?:[A-Za-z_][\w.]*\s*=\s*(?:global\s*::\s*)?)?R2API\.([A-Za-z0-9_]+)',
+            text, re.M))
+        # Fully qualified `R2API.Type` names a type, not a module; map only the types we know.
+        for name in re.findall(r"\bR2API\.([A-Za-z0-9_]+)\s*\.", text):
+            if name in R2API_MODULES:
+                imports.add(name)
+            elif name in R2API_TYPE_MODULES:
+                imports.add(R2API_TYPE_MODULES[name])
 
     errors, warnings = [], []
 
@@ -627,7 +648,11 @@ def audit_project(root: str | Path) -> dict:
         # false positives, so they are left alone. The R2API split is the failure this check exists for.
 
     # 3. searchable attributes only work when the assembly opts in
-    joined = "\n".join(path.read_text(encoding="utf-8-sig", errors="replace") for path in sources)
+    # Two views: literals blanked (identifier checks) and literals kept (attribute/event names). Comments are
+    # gone from both, so a commented-out line can no longer trip a check.
+    joined = "\n".join(texts[path] for path in sources)
+    joined_strings = "\n".join(_strip_csharp(path.read_text(encoding="utf-8-sig", errors="replace"), keep_strings=True)
+                               for path in sources)
     if "SearchableAttribute.OptIn" not in joined and re.search(r"\[RegisterAchievement|\[Searchable", joined):
         warnings.append("uses searchable/achievement attributes but no [assembly: HG.Reflection.SearchableAttribute.OptIn]")
 
@@ -640,7 +665,7 @@ def audit_project(root: str | Path) -> dict:
             for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
                 if "=" in line and not line.lstrip().startswith("#"):
                     keys.add(line.split("=", 1)[0].strip())
-        for ev in sorted(set(re.findall(r'"(Play_[A-Za-z0-9_]+)"', joined)) - keys):
+        for ev in sorted(set(re.findall(r'"(Play_[A-Za-z0-9_]+)"', joined_strings)) - keys):
             errors.append(f'"{ev}" is played in C# but missing from {events_files[0].name}')
 
     # 5. the manifest, csproj and plugin attribute must carry one version (three places drift apart by hand)
@@ -651,7 +676,7 @@ def audit_project(root: str | Path) -> dict:
         found = ET.parse(csproj).findtext(".//Version")
         if found and version and found != version:
             errors.append(f"{csproj.name} <Version> {found} != manifest version_number {version}")
-    for literal in set(re.findall(r'\bconst\s+string\s+\w*Version\s*=\s*"(\d+\.\d+\.\d+)"', joined)):
+    for literal in set(re.findall(r'\bconst\s+string\s+\w*Version\s*=\s*"(\d+\.\d+\.\d+)"', joined_strings)):
         if version and literal != version:
             errors.append(f'C# version constant "{literal}" != manifest version_number {version}')
 
@@ -689,11 +714,16 @@ def survivor_warnings(source: str) -> list[str]:
     if "waveOutWrite" in source and not re.search(r"cvVolumeSfx|volume_sfx", source):
         warnings.append("plays through waveOut but never reads the game's SFX volume; the in-game slider does nothing "
                         "(docs/AUDIO.md, Route B)")
-    # Compress() needs readable pixels; Apply(false, true) then frees the CPU copy, so that pair is the correct pattern.
-    frees_cpu_copy = re.search(r"\.Apply\s*\([^;)]*,\s*true\s*\)", source)
-    if re.search(r"LoadImage\s*\([^;]*,\s*false\s*\)", source) and not frees_cpu_copy:
-        warnings.append("ImageConversion.LoadImage(..., false) keeps a CPU copy of every texture; pass true unless the "
-                        "pixels are read back (docs/RUNTIME.md, 'Texture memory')")
+    # Compress() needs readable pixels; Apply(false, true) then frees the CPU copy, so that pair is the correct
+    # pattern. Paired per receiver: an unrelated Apply on another texture must not excuse the leak.
+    for match in re.finditer(r"(?:(\w+)\s*\.\s*)?LoadImage\s*\(([^;]*),\s*false\s*\)", source):
+        # `tex.LoadImage(bytes, false)` and the static `ImageConversion.LoadImage(tex, bytes, false)`
+        receiver, arguments = match.group(1), match.group(2)
+        texture = receiver if receiver and receiver != "ImageConversion" else arguments.split(",")[0].strip()
+        if not texture or not re.search(rf"\b{re.escape(texture)}\s*\.\s*Apply\s*\([^;)]*,\s*true\s*\)", source):
+            warnings.append("ImageConversion.LoadImage(..., false) keeps a CPU copy of every texture; pass true unless "
+                            "the pixels are read back (docs/RUNTIME.md, 'Texture memory')")
+            break
     return warnings
 
 
@@ -727,8 +757,9 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
         raise ValueError("PluginVersion must agree with the package version.")
     if receipt.get("source_sha256") != source_digest(folder) or receipt.get("assembly_sha256") != sha256(dll):
         raise ValueError("Source or DLL changed since the successful build; build again before packaging.")
-    if "package_sha256" in receipt and receipt["package_sha256"] != package_digest(folder):
-        raise ValueError("Manifest, README, icon or content/ changed since the successful build; build again before packaging.")
+    if receipt.get("package_sha256") != package_digest(folder):
+        raise ValueError("Manifest, README, icon or content/ changed since the successful build, or the receipt "
+                         "predates package provenance; build again before packaging.")
 
     # Release preflight: a package must never ship with the audit's blocking findings outstanding.
     # Warnings stay advisory; skipping the audit is allowed but reported in the result.
@@ -774,6 +805,41 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
             "runtime_verified": False,
             "note": "A valid archive proves packaging only; it does not show that the mod loads or works in game.",
             "publish": "not requested"}
+
+
+def release_check(docs: bool = True) -> dict:
+    """Every place the project's own version is written must agree before a release is tagged.
+
+    Reads VERSION, ror2forge.__version__, the newest CHANGELOG heading and, when git is available,
+    the tag that points at HEAD. Unknown is reported as unknown, never as a pass.
+    """
+    import ror2forge
+    version_file = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    package_version = ror2forge.__version__
+    changelog = ROOT / "CHANGELOG.md"
+    heading = None
+    if changelog.is_file():
+        for line in changelog.read_text(encoding="utf-8").splitlines():
+            match = re.match(r"# (\d+\.\d+\.\d+)", line)
+            if match:
+                heading = match.group(1)
+                break
+    errors = [f"VERSION {version_file} != ror2forge.__version__ {package_version}"] if version_file != package_version else []
+    if heading and heading != version_file:
+        errors.append(f"CHANGELOG newest heading {heading} != VERSION {version_file}")
+    tag = None
+    try:
+        tag = subprocess.run(["git", "describe", "--tags", "--exact-match", "HEAD"], cwd=ROOT,
+                             capture_output=True, text=True, timeout=20).stdout.strip() or None
+    except Exception:
+        tag = None
+    tag_version = tag.lstrip("v") if tag else None
+    if tag_version and tag_version != version_file:
+        errors.append(f"tag {tag} != VERSION {version_file}")
+    return {"version": version_file, "package_version": package_version, "changelog": heading,
+            "tag": tag_version, "tag_checked": tag is not None,
+            "valid": not errors, "errors": errors,
+            "note": "A matching version set proves the release is labelled consistently; it does not prove the code works."}
 
 
 def logs(path: str | None = None, lines: int = 250) -> dict:

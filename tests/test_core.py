@@ -41,7 +41,7 @@ class CoreTests(unittest.TestCase):
         dll = folder / "build/bin" / f"{name}.dll"
         dll.parent.mkdir(parents=True)
         dll.write_bytes(b"MZ" + b"fixture-dll")
-        core.write_json(folder / "build/receipt.json", {"assembly_sha256": core.sha256(dll), "source_sha256": core.source_digest(folder)})
+        core.write_json(folder / "build/receipt.json", {"assembly_sha256": core.sha256(dll), "source_sha256": core.source_digest(folder), "package_sha256": core.package_digest(folder)})
         return folder
 
     def archive(self, extra=None, manifest=None, icon=None):
@@ -115,6 +115,10 @@ class CoreTests(unittest.TestCase):
         manifest = core.read_json(folder / "manifest.json")
         manifest["version_number"] = "2.0.0"
         core.write_json(folder / "manifest.json", manifest)
+        core.write_json(folder / "build/receipt.json", {
+            "assembly_sha256": core.sha256(folder / "build/bin/Example.dll"),
+            "source_sha256": core.source_digest(folder),
+            "package_sha256": core.package_digest(folder)})
         with self.assertRaisesRegex(ValueError, "must agree"):
             core.package_mod("Example")
 
@@ -122,7 +126,7 @@ class CoreTests(unittest.TestCase):
         folder = self.built_fixture()
         source = folder / "src/Plugin.cs"
         source.write_text(source.read_text().replace("PluginVersion = ", "PluginVersion="))
-        core.write_json(folder / "build/receipt.json", {"assembly_sha256": core.sha256(folder / "build/bin/Example.dll"), "source_sha256": core.source_digest(folder)})
+        core.write_json(folder / "build/receipt.json", {"assembly_sha256": core.sha256(folder / "build/bin/Example.dll"), "source_sha256": core.source_digest(folder), "package_sha256": core.package_digest(folder)})
         self.assertTrue(core.package_mod("Example")["valid"])
 
     def test_comment_cannot_hide_wrong_plugin_version(self):
@@ -136,20 +140,21 @@ class CoreTests(unittest.TestCase):
         folder = self.built_fixture()
         core.package_mod("Example")
         (folder / "README.md").write_text("Different release")
-        with self.assertRaisesRegex(ValueError, "bump"):
+        # Either gate may fire first: the payload changed after the build, or it rebuilt to different bytes.
+        with self.assertRaisesRegex(ValueError, "build again|bump"):
             core.package_mod("Example")
 
     def test_content_assets_are_included(self):
         folder = self.built_fixture()
         (folder / "content/testassets").write_bytes(b"asset bundle fixture")
-        core.write_json(folder / "build/receipt.json", {"assembly_sha256": core.sha256(folder / "build/bin/Example.dll"), "source_sha256": core.source_digest(folder)})
+        core.write_json(folder / "build/receipt.json", {"assembly_sha256": core.sha256(folder / "build/bin/Example.dll"), "source_sha256": core.source_digest(folder), "package_sha256": core.package_digest(folder)})
         result = core.package_mod("Example")
         self.assertIn("plugins/Example/testassets", result["files"])
 
     def test_content_cannot_bundle_other_dlls(self):
         folder = self.built_fixture()
         (folder / "content/RoR2.dll").write_bytes(b"forbidden")
-        core.write_json(folder / "build/receipt.json", {"assembly_sha256": core.sha256(folder / "build/bin/Example.dll"), "source_sha256": core.source_digest(folder)})
+        core.write_json(folder / "build/receipt.json", {"assembly_sha256": core.sha256(folder / "build/bin/Example.dll"), "source_sha256": core.source_digest(folder), "package_sha256": core.package_digest(folder)})
         with self.assertRaisesRegex(ValueError, "runtime assets"):
             core.package_mod("Example")
 

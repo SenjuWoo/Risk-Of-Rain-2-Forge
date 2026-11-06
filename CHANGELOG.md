@@ -1,3 +1,21 @@
+# 1.13.1 — Review follow-ups: provenance, comments, aliases (2026-11-06)
+
+- Packaging requires package provenance. A receipt written before 1.13.0 has no `package_sha256`, and that
+  absence used to skip the freshness gate entirely; it is now refused with a rebuild instruction. Rebuilding
+  writes the field, so the migration path is the same as any other stale build.
+- Audit checks 3-5 read the comment-stripped source. `// const string FakeVersion = "9.9.9";` no longer reports
+  a version mismatch, and `// var sound = "Play_Deleted";` no longer reports a missing audio event. Two views are
+  used: literals blanked for identifiers, literals kept for attribute and event names.
+- Qualified references no longer invent modules. `R2API.RecalculateStatsAPI.X` is a type in the root namespace,
+  not a `R2API_RecalculateStatsAPI` package; known namespaces (`R2API.Skins.…`) still count, known types map to
+  their real module, and an unknown name is ignored instead of guessed. `using global::R2API.Skins;` is detected.
+- The texture warning pairs `LoadImage(..., false)` with `Apply(false, true)` on the *same* texture, including the
+  static `ImageConversion.LoadImage(tex, …)` form, so an unrelated `Apply` in the same file cannot excuse a leak.
+- New `forge release-check`: compares `VERSION`, the package version, the newest CHANGELOG heading and the tag on
+  HEAD, and reports unknown rather than passing when it cannot check a source.
+- The analyzer is a regex pass over stripped source, not a C# parser. Supported forms are listed in
+  `docs/AGENT_GUIDE.md`; anything outside them is reported as unchecked rather than as clean.
+
 # 1.13.0 — Release preflight and honest validation (2026-11-06)
 
 - `forge package` runs the project audit first and refuses to build an archive while it reports blocking
