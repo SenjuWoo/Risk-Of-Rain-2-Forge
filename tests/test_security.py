@@ -48,12 +48,17 @@ class IsolationTests(unittest.TestCase):
         dll = folder / "build/bin" / f"{name}.dll"
         dll.parent.mkdir(parents=True, exist_ok=True)
         dll.write_bytes(b"MZ" + b"victim-dll")
+        self._receipt(folder)
+        return folder
+
+    def _receipt(self, folder):
+        """Fresh receipt for the current tree; call it after building links so packaging reaches validation."""
+        dll = folder / "build/bin" / f"{folder.name}.dll"
         core.write_json(folder / "build/receipt.json", {
             "assembly_sha256": core.sha256(dll),
             "source_sha256": core.source_digest(folder),
             "package_sha256": core.package_digest(folder),
         })
-        return folder
 
     def test_cross_project_file_link_is_rejected(self):
         other = self._project("Other")
@@ -63,6 +68,7 @@ class IsolationTests(unittest.TestCase):
         link = victim / "content/asset.txt"
         if not make_link(other / "PRIVATE-do-not-ship.txt", link):
             self.skipTest("this platform cannot create file links")
+        self._receipt(victim)
         with self.assertRaises(ValueError) as raised:
             core.package_mod("Victim")
         self.assertIn("links or junctions", str(raised.exception))
@@ -76,8 +82,10 @@ class IsolationTests(unittest.TestCase):
         link = victim / "content"
         if not make_link(other / "private", link):
             self.skipTest("this platform cannot create directory links")
-        with self.assertRaises(ValueError):
+        self._receipt(victim)
+        with self.assertRaises(ValueError) as raised:
             core.package_mod("Victim")
+        self.assertIn("links or junctions", str(raised.exception))
 
     def test_link_escaping_the_forge_root_is_rejected(self):
         victim = self._project()
@@ -87,8 +95,10 @@ class IsolationTests(unittest.TestCase):
         link = victim / "content/escape.txt"
         if not make_link(outside, link):
             self.skipTest("this platform cannot create file links")
-        with self.assertRaises(ValueError):
+        self._receipt(victim)
+        with self.assertRaises(ValueError) as raised:
             core.package_mod("Victim")
+        self.assertIn("links or junctions", str(raised.exception))
 
     def test_normal_nested_assets_still_package(self):
         victim = self._project()
