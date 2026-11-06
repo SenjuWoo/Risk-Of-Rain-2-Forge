@@ -204,7 +204,9 @@ class ManagedDetectionTests(unittest.TestCase):
         return bytes(data)
 
     def _write(self, data):
-        directory = tempfile.mkdtemp(dir=core.PACKAGE_ROOT / "artifacts/test-temp")
+        area = core.PACKAGE_ROOT / "artifacts/test-temp"
+        area.mkdir(parents=True, exist_ok=True)      # artifacts/ is gitignored: absent in a fresh clone
+        directory = tempfile.mkdtemp(dir=area)
         path = pathlib.Path(directory) / "sample.dll"
         path.write_bytes(data)
         self.addCleanup(shutil.rmtree, directory, True)
