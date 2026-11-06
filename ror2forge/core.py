@@ -59,6 +59,35 @@ def owned(path: Path) -> Path:
     return resolved
 
 
+def _reparse_point(path: Path) -> bool:
+    """True for a symlink or a Windows reparse point (junction), without following it."""
+    try:
+        info = path.lstat()
+    except OSError:
+        return False
+    return path.is_symlink() or bool(getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def project_input(folder: Path, path: Path) -> Path:
+    """Validate an input file against one project's own boundary.
+
+    `owned()` only promises the forge workspace, which is too wide: a link from projects/A into projects/B
+    still lands inside the workspace while handing another mod's bytes to the packer. Every input is checked
+    for reparse points from the file up to its project root, then resolved and re-checked against that root.
+    """
+    folder = folder.resolve()
+    candidate = path.absolute()
+    for ancestor in (candidate, *candidate.parents):
+        if ancestor == folder.parent:
+            break
+        if _reparse_point(ancestor):
+            raise ValueError(f"Project inputs may not be links or junctions: {ancestor}")
+    resolved = candidate.resolve()
+    if resolved != folder and folder not in resolved.parents:
+        raise ValueError(f"Input escapes its project: {path}")
+    return resolved
+
+
 def project(name: str) -> Path:
     return owned(ROOT / "projects" / safe_name(name))
 
@@ -337,7 +366,11 @@ def build(name: str, locked: bool = False, offline: bool = False) -> dict:
     if after != before:
         raise RuntimeError("Project inputs changed while the build ran; no trustworthy receipt was written. Build again.")
     dll = owned(output / f"{name}.dll")
-    receipt = {"project": name, "version": metadata["version"], "assembly": str(dll), "assembly_sha256": sha256(dll), "source_sha256": after[0], "package_sha256": after[1],
+    lock = next((candidate for candidate in (folder / "src/packages.lock.json", folder / "packages.lock.json")
+                 if candidate.is_file()), None)
+    if locked and lock is None:
+        raise RuntimeError("--locked needs an existing packages.lock.json; run a normal build first.")
+    receipt = {"project": name, "lock_sha256": sha256(lock) if lock else None, "version": metadata["version"], "assembly": str(dll), "assembly_sha256": sha256(dll), "source_sha256": after[0], "package_sha256": after[1],
                "sdk": run_process(["dotnet", "--version"], cwd=folder, env=environment).stdout.strip(), "built_at": datetime.now(timezone.utc).isoformat(),
                "log": str(log), "warnings": sorted({line.strip() for line in logs.splitlines() if re.search(r"\bwarning [A-Z]+[0-9]+:", line)}), "runtime_verified": False}
     write_json(owned(folder / "build/receipt.json"), receipt)
@@ -844,6 +877,11 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
         raise ValueError("PluginVersion must agree with the package version.")
     if receipt.get("source_sha256") != source_digest(folder) or receipt.get("assembly_sha256") != sha256(dll):
         raise ValueError("Source or DLL changed since the successful build; build again before packaging.")
+    if receipt.get("lock_sha256"):
+        lock = next((candidate for candidate in (folder / "src/packages.lock.json", folder / "packages.lock.json")
+                     if candidate.is_file()), None)
+        if lock is None or sha256(lock) != receipt["lock_sha256"]:
+            raise ValueError("packages.lock.json changed since the successful build; build again before packaging.")
     if receipt.get("package_sha256") != package_digest(folder):
         raise ValueError("Manifest, README, icon or content/ changed since the successful build, or the receipt "
                          "predates package provenance; build again before packaging.")
@@ -856,30 +894,52 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
     package_before = package_digest(folder)
     output = owned(ROOT / "artifacts" / f"{metadata['author']}-{name}-{metadata['version']}.zip")
     output.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"manifest.json": folder / "manifest.json", "README.md": folder / "README.md", "icon.png": folder / "icon.png", f"plugins/{name}/{name}.dll": dll}
+
+    # Snapshot every packaged byte now, after boundary validation. The archive is then written from memory,
+    # so replacing a file mid-package (including the DLL) cannot put unverified bytes in a trusted ZIP.
+    payload: dict[str, bytes] = {}
+
+    def take(archive_name: str, source: Path) -> None:
+        resolved = project_input(folder, source)
+        if not resolved.is_file():
+            raise ValueError(f"Packaged input is not a file: {source}")
+        payload[archive_name] = resolved.read_bytes()
+
+    take("manifest.json", folder / "manifest.json")
+    take("README.md", folder / "README.md")
+    take("icon.png", folder / "icon.png")
+    take(f"plugins/{name}/{name}.dll", dll)
     content = folder / "content"
     for item in sorted(content.rglob("*")) if content.exists() else []:
-        owned(item)
-        if item.is_file():
-            if item.suffix.lower() in {".dll", ".exe", ".pdb", ".cs", ".csproj", ".py", ".ps1", ".cmd", ".bat", ".nupkg", ".zip", ".7z"}:
-                raise ValueError(f"content/ is for runtime assets, not code or archives: {item.name}")
-            payload[f"plugins/{name}/{item.relative_to(content).as_posix()}"] = item
+        if not item.is_file():
+            continue
+        if item.suffix.lower() in {".dll", ".exe", ".pdb", ".cs", ".csproj", ".py", ".ps1", ".cmd", ".bat", ".nupkg", ".zip", ".7z"}:
+            raise ValueError(f"content/ is for runtime assets, not code or archives: {item.name}")
+        take(f"plugins/{name}/{item.relative_to(content).as_posix()}", item)
     for license_name in ("LICENSE", "LICENSE.txt", "LICENSE.md"):
         if (folder / license_name).is_file():
-            payload[license_name] = folder / license_name
+            take(license_name, folder / license_name)
     if len({path.casefold() for path in payload}) != len(payload):
         raise ValueError("Package paths collide; rename content files.")
-    for item in payload.values():
-        owned(item)
+    if hashlib.sha256(payload[f"plugins/{name}/{name}.dll"]).hexdigest() != receipt.get("assembly_sha256"):
+        raise ValueError("The DLL changed while packaging started; build and package again.")
     with tempfile.NamedTemporaryFile(dir=output.parent, suffix=".zip", delete=False) as stream:
         staging = Path(stream.name)
     try:
         with zipfile.ZipFile(staging, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as package:
-            for archive_name, source in sorted(payload.items()):
+            for archive_name, data in sorted(payload.items()):
                 entry = zipfile.ZipInfo(archive_name, date_time=(2020, 1, 1, 0, 0, 0))
                 entry.compress_type = zipfile.ZIP_DEFLATED
                 entry.external_attr = 0o100644 << 16
-                package.writestr(entry, source.read_bytes())
+                package.writestr(entry, data)
+        # Read the archive back and compare every member with the snapshot: the staging file, not the
+        # source tree, is what gets promoted.
+        with zipfile.ZipFile(staging) as written:
+            if sorted(written.namelist()) != sorted(payload):
+                raise ValueError("Archive members do not match the validated payload; package again.")
+            for archive_name, data in payload.items():
+                if hashlib.sha256(written.read(archive_name)).hexdigest() != hashlib.sha256(data).hexdigest():
+                    raise ValueError(f"Archive member {archive_name} differs from the validated bytes; package again.")
         if package_digest(folder) != package_before:
             raise ValueError("Payload files changed while the archive was written; package again.")
         result = validate(staging)
@@ -957,34 +1017,101 @@ def release_check(mode: str = "prerelease", assets: str | Path | None = None) ->
         errors.append("cannot verify the release tag: git is unavailable")
     if mode == "prerelease" and tag_status == "absent":
         tag_status = "not_required"
+    # Release assets: the published bytes themselves, never just a claim that they exist.
+    asset_errors: list[str] = []
     asset_report = None
+    if mode == "release" and not assets:
+        asset_errors.append("release verification requires --assets with the downloaded release files")
     if assets:
         folder = Path(assets)
-        sums = folder / "SHA256SUMS"
-        receipts = folder / "BUILD-RECEIPT.json"
-        if not sums.is_file() or not receipts.is_file():
-            errors.append("asset folder lacks SHA256SUMS or BUILD-RECEIPT.json")
+        sums, receipts = folder / "SHA256SUMS", folder / "BUILD-RECEIPT.json"
+        listed: dict[str, str] = {}
+        if not sums.is_file():
+            asset_errors.append("SHA256SUMS is missing")
         else:
-            for line in sums.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
+            for raw in sums.read_text(encoding="utf-8-sig").splitlines():
+                line = raw.strip()
+                if not line:
                     continue
-                digest, name = line.split(None, 1)
-                target = folder / name.strip()
+                parts = line.split(None, 1)
+                if len(parts) != 2 or not re.fullmatch(r"[0-9a-fA-F]{64}", parts[0]):
+                    asset_errors.append(f"malformed checksum line: {line[:80]}")
+                    continue
+                digest, name = parts[0].lower(), parts[1].strip().lstrip("*")
+                if name in listed:
+                    asset_errors.append(f"duplicate checksum entry: {name}")
+                if name.startswith(("/", "\\")) or ".." in Path(name).parts or ":" in name:
+                    asset_errors.append(f"unsafe asset path: {name}")
+                    continue
+                listed[name] = digest
+                target = folder / name
                 if not target.is_file():
-                    errors.append(f"listed asset missing: {name.strip()}")
+                    asset_errors.append(f"listed asset missing: {name}")
                 elif sha256(target) != digest:
-                    errors.append(f"asset hash mismatch: {name.strip()}")
-            claimed = read_json(receipts).get("commit")
+                    asset_errors.append(f"asset hash mismatch: {name}")
+            if not listed:
+                asset_errors.append("SHA256SUMS lists no files")
+            if not any(name.endswith("-source.zip") for name in listed):
+                asset_errors.append("no source archive is listed in SHA256SUMS")
+        receipt: dict = {}
+        if not receipts.is_file():
+            asset_errors.append("BUILD-RECEIPT.json is missing")
+        else:
+            try:
+                receipt = read_json(receipts)
+            except (ValueError, OSError) as exc:
+                asset_errors.append(f"BUILD-RECEIPT.json is not valid JSON: {exc}")
+        if receipt:
+            artifact = receipt.get("artifact") or {}
+            for key in ("file", "sha256", "size_bytes"):
+                if not artifact.get(key):
+                    asset_errors.append(f"receipt artifact is missing {key}")
+            if artifact.get("file") and artifact.get("file") not in listed:
+                asset_errors.append("receipt artifact is not covered by SHA256SUMS")
+            claimed_file = folder / str(artifact.get("file", ""))
+            if artifact.get("sha256") and claimed_file.is_file():
+                if sha256(claimed_file) != artifact["sha256"]:
+                    asset_errors.append("receipt artifact hash does not match the published file")
+                if artifact.get("size_bytes") and claimed_file.stat().st_size != artifact["size_bytes"]:
+                    asset_errors.append("receipt artifact size does not match the published file")
             actual = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
                                     text=True, timeout=20).stdout.strip()
-            if claimed != actual:
-                errors.append(f"receipt commit {claimed} != HEAD {actual}")
-            asset_report = {"commit_claimed": claimed, "commit_actual": actual}
-    verified = not errors and tag_status in {"ok", "not_required"} and bool(asset_report or not assets)
+            if not receipt.get("commit"):
+                asset_errors.append("receipt has no commit")
+            elif receipt["commit"] != actual:
+                asset_errors.append(f"receipt commit {receipt['commit']} != HEAD {actual}")
+            if not receipt.get("ci_checks"):
+                asset_errors.append("receipt lists no CI checks")
+            asset_report = {"files": sorted(listed), "commit_claimed": receipt.get("commit"),
+                            "commit_actual": actual}
+    errors.extend(asset_errors)
+    version_consistent = not [e for e in errors if any(k in e for k in ("VERSION", "version", "CHANGELOG"))]
+    tag_verified = tag_status in {"ok", "not_required"}
+    assets_verified = bool(assets) and not asset_errors
     return {"mode": mode, "version": version, "package_version": package_version, "changelog": heading,
             "tag": tag_name, "tag_status": tag_status, "assets": asset_report,
-            "valid": not errors, "verified": verified, "errors": errors, "warnings": warnings,
+            "checks": {"version": version_consistent, "tag": tag_verified,
+                       "assets": assets_verified, "ci": None},
+            "valid": not errors,
+            "release_verified": not errors and tag_verified and assets_verified,
+            "verified": not errors and tag_verified and assets_verified,
+            "errors": errors, "warnings": warnings,
             "note": "A matching version set proves the release is labelled consistently; it does not prove the code works."}
+
+
+LOG_ROOTS = ("artifacts", "logs")
+
+
+def _log_allowed(path: Path) -> bool:
+    """A path this tool may read as a log: a discovered profile log, or a forge diagnostic log."""
+    resolved = path.resolve()
+    if any(Path(profile["log"]).resolve() == resolved for profile in discover()["profiles"]):
+        return True
+    for name in LOG_ROOTS:
+        root = (ROOT / name).resolve()
+        if resolved.is_relative_to(root) and resolved.suffix.lower() == ".log":
+            return True
+    return False
 
 
 def logs(path: str | None = None, lines: int = 250) -> dict:
@@ -996,8 +1123,12 @@ def logs(path: str | None = None, lines: int = 250) -> dict:
         if not candidates:
             raise ValueError("No BepInEx log exists yet; launch a test profile or pass --path.")
         selected = max(candidates, key=lambda item: (item.stat().st_mtime_ns, str(item)))
+    if not _log_allowed(selected):
+        raise ValueError("Only discovered BepInEx logs and forge logs under artifacts/ or logs/ can be read.")
+    if selected.stat().st_size > 64 * 1024 * 1024:
+        raise ValueError("Log is larger than 64 MiB; copy the tail you need instead.")
     with selected.open(encoding="utf-8-sig", errors="replace") as stream:
-        tail = list(deque(stream, maxlen=lines))
+        tail = [line[:4000] for line in deque(stream, maxlen=lines)]
     issues = [line.rstrip() for line in tail if re.search(r"error|exception|could not load|missingmethod|typeload|failed", line, re.I)]
     return {"path": str(selected), "tail": "".join(tail), "possible_issues": issues,
             "note": "Text matches are triage candidates, not a crash diagnosis or runtime success proof."}

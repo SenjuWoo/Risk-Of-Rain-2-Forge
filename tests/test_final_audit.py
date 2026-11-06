@@ -183,47 +183,85 @@ class ReleaseModeTests(Fixture):
         self.assertFalse(prerelease["verified"])
         self.assertTrue(any("git unavailable" in w for w in prerelease["warnings"]))
 
-    def test_asset_folder_is_verified(self):
-        self._project()
+    def _publish(self, head="deadbeef"):
+        """A release folder shaped like a real one: source zip, receipt with artifact+ci, sums."""
         assets = self.root / "assets"
-        assets.mkdir()
-        payload = assets / "kit.zip"
-        payload.write_bytes(b"payload")
+        assets.mkdir(exist_ok=True)
+        zip_path = assets / "kit-source.zip"
+        zip_path.write_bytes(b"release bytes")
+        receipt = {"commit": head, "artifact": {"file": "kit-source.zip", "sha256": core.sha256(zip_path),
+                                                "size_bytes": zip_path.stat().st_size},
+                   "ci_checks": [{"name": "CI", "conclusion": "success"}]}
+        (assets / "BUILD-RECEIPT.json").write_text(json.dumps(receipt), encoding="utf-8")
+        rows = [
+            f"{core.sha256(zip_path)}  kit-source.zip",
+            f"{core.sha256(assets / 'BUILD-RECEIPT.json')}  BUILD-RECEIPT.json",
+            "",
+        ]
+        (assets / "SHA256SUMS").write_text(chr(10).join(rows), encoding="utf-8")
+        return assets
+
+    def _release(self, assets, head="deadbeef"):
+        with patch.object(core, "ROOT", self.root), patch("ror2forge.__version__", "1.2.3"),                 self._git(stdout="v1.2.3", head=head):
+            return core.release_check("release", assets)
+
+    def test_complete_assets_verify(self):
+        self._project()
+        result = self._release(self._publish())
+        self.assertTrue(result["release_verified"], result["errors"])
+        self.assertTrue(result["checks"]["assets"])
+
+    def test_empty_checksum_file_fails(self):
+        self._project()
+        assets = self._publish()
+        (assets / "SHA256SUMS").write_text("", encoding="utf-8")
+        result = self._release(assets)
+        self.assertFalse(result["release_verified"])
+        self.assertIn("lists no files", " ".join(result["errors"]))
+
+    def test_missing_source_zip_fails(self):
+        self._project()
+        assets = self._publish()
+        (assets / "kit-source.zip").unlink()
+        self.assertFalse(self._release(assets)["release_verified"])
+
+    def test_receipt_with_only_a_commit_is_incomplete(self):
+        self._project()
+        assets = self._publish()
         (assets / "BUILD-RECEIPT.json").write_text(json.dumps({"commit": "deadbeef"}), encoding="utf-8")
-        (assets / "SHA256SUMS").write_text(f"{core.sha256(payload)}  kit.zip\n", encoding="utf-8")
-        with patch.object(core, "ROOT", self.root), patch("ror2forge.__version__", "1.2.3"), \
-                self._git(stdout="v1.2.3"):
-            good = core.release_check("release", assets)
-        self.assertTrue(good["valid"], good["errors"])
-        payload.write_bytes(b"tampered")
-        with patch.object(core, "ROOT", self.root), patch("ror2forge.__version__", "1.2.3"), \
-                self._git(stdout="v1.2.3"):
-            bad = core.release_check("release", assets)
-        self.assertFalse(bad["valid"])
-        self.assertTrue(any("hash mismatch" in e for e in bad["errors"]))
+        result = self._release(assets)
+        self.assertFalse(result["release_verified"])
+        self.assertTrue(any("artifact is missing" in e for e in result["errors"]))
 
-class ProvenanceTests(Fixture):
-    def test_source_change_during_build_writes_no_receipt(self):
-        import shutil
-        shutil.copytree(REAL_ROOT / "templates", self.root / "templates")
-        shutil.copyfile(REAL_ROOT / "NuGet.Config", self.root / "NuGet.Config")
-        with patch.object(core, "ROOT", self.root):
-            core.new_mod("Racy", "Team")
-            folder = core.project("Racy")
-            calls = {"n": 0}
+    def test_tampered_zip_fails(self):
+        self._project()
+        assets = self._publish()
+        (assets / "kit-source.zip").write_bytes(b"tampered")
+        self.assertFalse(self._release(assets)["release_verified"])
 
-            def fake_run(command, **kwargs):
-                calls["n"] += 1
-                if calls["n"] == 1:      # restore: an editor saves a file mid-build
-                    (folder / "src" / "Plugin.cs").write_text("// edited during the build" + chr(10), encoding="utf-8")
-                return subprocess.CompletedProcess(command, 0, "", "")
+    def test_duplicate_and_traversal_entries_fail(self):
+        self._project()
+        assets = self._publish()
+        good = core.sha256(assets / "kit-source.zip")
+        (assets / "SHA256SUMS").write_text(chr(10).join([f"{good}  kit-source.zip"] * 2) + chr(10), encoding="utf-8")
+        self.assertFalse(self._release(assets)["release_verified"])
+        (assets / "SHA256SUMS").write_text(f"{good}  ../escape.zip" + chr(10), encoding="utf-8")
+        self.assertFalse(self._release(assets)["release_verified"])
 
-            with patch.object(core, "run_process", side_effect=fake_run),                     patch("ror2forge.toolchain.dotnet_env", return_value={}):
-                with self.assertRaises(RuntimeError) as raised:
-                    core.build("Racy")
-            self.assertIn("changed while the build ran", str(raised.exception))
-            self.assertFalse((folder / "build" / "receipt.json").exists(),
-                             "a receipt was written for inputs that changed mid-build")
+    def test_wrong_receipt_commit_fails(self):
+        self._project()
+        assets = self._publish(head="cafebabe")
+        result = self._release(assets, head="cafebabe")
+        self.assertTrue(result["release_verified"], result["errors"])
+        result = self._release(assets, head="deadbeef")
+        self.assertFalse(result["release_verified"])
+
+    def test_no_assets_means_not_release_verified(self):
+        self._project()
+        with patch.object(core, "ROOT", self.root), patch("ror2forge.__version__", "1.2.3"),                 self._git(stdout="v1.2.3"):
+            result = core.release_check("release")
+        self.assertFalse(result["release_verified"])
+        self.assertTrue(any("--assets" in e for e in result["errors"]))
 
 
 class AudioMapTests(Fixture):

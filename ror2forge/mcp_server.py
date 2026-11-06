@@ -50,7 +50,7 @@ def forge_doctor() -> dict:
 
 
 @server.tool()
-def forge_new(name: str, author: str, template: Literal["plugin", "stats"] = "plugin", description: str = "A Risk of Rain 2 mod.") -> dict:
+def forge_new(name: str, author: str, template: Literal["plugin", "stats", "procedural"] = "plugin", description: str = "A Risk of Rain 2 mod.") -> dict:
     """Create a pinned mod project under projects/; refuses to replace an existing project."""
     return _run("new", name, "--author", author, "--template", template, "--description", description)
 

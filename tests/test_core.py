@@ -192,13 +192,18 @@ class CoreTests(unittest.TestCase):
             self.assertTrue(core.check_manifest({**manifest, field: value}), field)
 
     def test_log_tail_and_candidates(self):
-        log = self.root / "log.txt"
+        (self.root / "artifacts").mkdir(exist_ok=True)
+        log = self.root / "artifacts" / "BepInEx.log"
         log.write_text("first\nError: missing API\nlast\n")
         result = core.logs(str(log), 2)
         self.assertEqual(result["tail"], "Error: missing API\nlast\n")
         self.assertEqual(len(result["possible_issues"]), 1)
         with self.assertRaises(ValueError):
             core.logs(str(log), 5001)
+        secret = self.root / "VERSION"
+        secret.write_text("1.2.3" + chr(10))
+        with self.assertRaises(ValueError):
+            core.logs(str(secret), 5)
 
     def test_flat_asset_folder_is_rejected(self):
         # The exact shape that shipped broken: DLL and assets/ both at the ZIP root. The manager empties
