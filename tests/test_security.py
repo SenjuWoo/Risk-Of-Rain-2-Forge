@@ -189,6 +189,30 @@ class IsolationTests(unittest.TestCase):
             core.package_mod("Victim")
         self.assertIn("no lock provenance", str(raised.exception))
 
+    def test_replaced_parent_directory_cannot_redirect_a_read(self):
+        other = self._project("Other")
+        (other / "content").mkdir(parents=True, exist_ok=True)
+        (other / "content/PRIVATE-do-not-ship.txt").write_text("secret", encoding="utf-8")
+        victim = self._project()
+        (victim / "content").mkdir(exist_ok=True)
+        (victim / "content/asset.txt").write_text("mine", encoding="utf-8")
+        resolved = core.project_input(victim, victim / "content/asset.txt")
+        moved = victim / "content-moved"
+        (victim / "content").rename(moved)
+        if os.name == "nt":
+            made = subprocess.run(["cmd", "/c", "mklink", "/J", str(victim / "content"),
+                                   str(other / "content")], capture_output=True, text=True)
+            if made.returncode != 0:
+                self.skipTest("cannot create a junction here")
+        else:
+            try:
+                os.symlink(other / "content", victim / "content", target_is_directory=True)
+            except OSError:
+                self.skipTest("cannot create a symlink here")
+        with self.assertRaises(ValueError) as raised:
+            safefs.read_bounded(resolved, safefs.Budget(), "asset.txt", victim)
+        self.assertRegex(str(raised.exception).lower(), "outside its project|link|reparse")
+
 
 class PackageSnapshotTests(unittest.TestCase):
     def setUp(self):

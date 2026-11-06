@@ -55,7 +55,18 @@ receipt must be an object with `commit`, `artifact{file,sha256,size_bytes,files}
 checksums must be well formed, unique, inside the folder, and match bytes and sizes: every `SHA256SUMS` entry must be well formed, unique, inside the folder, and match the
 file's bytes and the receipt's claimed artifact hash/size, with the receipt commit equal to HEAD. It reports
 `checks.version`, `checks.tag`, `checks.assets` and `release_verified` separately; a missing asset folder is
-`not release-verified`, never a pass. `checks.ci` is read independently from the repository's check-runs for the exact commit; nothing in the receipt is
+`not release-verified`, never a pass. ### Building the source archive
+
+```bash
+git -c core.autocrlf=false archive --format=zip --prefix=Risk-of-Rain-2-Forge-<version>/ <tag>     -o artifacts/release-<version>/Risk-of-Rain-2-Forge-<version>-source.zip
+```
+
+The `core.autocrlf=false` override is required: with line-ending conversion enabled, Git exports CRLF into the
+archive while the committed blob keeps LF, and `release-check` compares every member's Git blob hash to the tagged
+tree and will (correctly) report every text file as changed. Archives published before 1.13.8 were built without the
+override and therefore fail the content comparison; that is a true statement about those files, not a regression.
+
+`checks.ci` is read independently from the repository's check-runs for the exact commit; nothing in the receipt is
 trusted for CI. `release_verified` requires it to be `verified`. CI runs prerelease mode on every push; the tag
 workflow runs release mode; `release-published.yml` re-verifies the downloaded bytes after publication.
 
