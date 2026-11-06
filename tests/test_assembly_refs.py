@@ -185,3 +185,63 @@ class RealReaderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManagedDetectionTests(unittest.TestCase):
+    """The pre-filter decides whether the metadata reader runs at all, so it must be precise and leak nothing."""
+
+    @staticmethod
+    def _pe(cli_size=0x48):
+        import struct
+        data = bytearray(1024)
+        data[0:2] = b"MZ"
+        struct.pack_into("<I", data, 0x3C, 0x80)
+        data[0x80:0x84] = bytes([80, 69, 0, 0])
+        optional = 0x80 + 24
+        struct.pack_into("<H", data, optional, 0x20B)              # PE32+
+        struct.pack_into("<I", data, optional + 108, 16)            # number of data directories
+        struct.pack_into("<II", data, optional + 112 + 14 * 16, 0x2000, cli_size)
+        return bytes(data)
+
+    def _write(self, data):
+        area = core.PACKAGE_ROOT / "artifacts/test-temp"
+        area.mkdir(parents=True, exist_ok=True)      # artifacts/ is gitignored: absent in a fresh clone
+        directory = tempfile.mkdtemp(dir=area)
+        path = pathlib.Path(directory) / "sample.dll"
+        path.write_bytes(data)
+        self.addCleanup(shutil.rmtree, directory, True)
+        return path
+
+    def test_a_pe_with_a_cli_directory_is_managed(self):
+        self.assertTrue(core._looks_managed(self._write(self._pe())))
+
+    def test_a_pe_without_a_cli_directory_is_not_managed(self):
+        self.assertFalse(core._looks_managed(self._write(self._pe(cli_size=0))))
+
+    def test_a_plain_native_image_is_rejected(self):
+        data = bytearray(self._pe())
+        data[0x80:0x84] = bytes([80, 69, 0, 0])
+        import struct
+        struct.pack_into("<H", data, 0x80 + 24, 0x10B)              # PE32 without directory 14
+        struct.pack_into("<I", data, 0x80 + 24 + 92, 2)
+        self.assertFalse(core._looks_managed(self._write(bytes(data))))
+
+    def test_a_stub_with_the_marker_still_counts(self):
+        """Build fixtures and a few packed assemblies are not conforming PEs; the reader is the final judge."""
+        self.assertTrue(core._looks_managed(self._write(b"MZBSJB stub")))
+
+    def test_random_bytes_are_rejected(self):
+        self.assertFalse(core._looks_managed(self._write(bytes(128))))
+
+    def test_detection_leaves_no_file_handle_open(self):
+        import gc
+        import warnings
+        path = self._write(self._pe())
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", ResourceWarning)
+            for _ in range(3):
+                core._looks_managed(path)
+            gc.collect()
+        leaked = [w for w in caught if issubclass(w.category, ResourceWarning)]
+        self.assertEqual(leaked, [], [str(w.message) for w in leaked])
+        path.unlink()          # a still-open handle would block this on Windows

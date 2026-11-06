@@ -892,13 +892,46 @@ def _within(root: Path, path: Path) -> bool:
         return False
 
 
-def _looks_managed(path: Path) -> bool:
-    """True when the file is a PE image that advertises a CLI metadata block ('BSJB')."""
+def _has_cli_header(head: bytes) -> bool:
+    """True when the PE optional header declares a CLI data directory (index 14) with size."""
+    if len(head) < 64 or head[:2] != b"MZ":
+        return False
     try:
-        head = path.open("rb").read(4 * 1024 * 1024)
+        offset = struct.unpack_from("<I", head, 0x3C)[0]
+        if offset + 24 > len(head) or head[offset:offset + 4] != b"PE\0\0":
+            return False
+        optional = offset + 24
+        magic = struct.unpack_from("<H", head, optional)[0]
+        if magic == 0x10B:          # PE32
+            count_at, dirs_at, entry = optional + 92, optional + 96, 8
+        elif magic == 0x20B:        # PE32+
+            count_at, dirs_at, entry = optional + 108, optional + 112, 16
+        else:
+            return False
+        if struct.unpack_from("<I", head, count_at)[0] <= 14:
+            return False
+        if dirs_at + 14 * entry + 8 > len(head):
+            return False
+        rva, size = struct.unpack_from("<II", head, dirs_at + 14 * entry)
+        return size > 0 and rva > 0
+    except struct.error:
+        return False
+
+
+def _looks_managed(path: Path) -> bool:
+    """True when the file is a PE image carrying a CLI header.
+
+    The documented PE fields (e_lfanew, optional-header magic, data-directory 14) decide it, so an assembly whose
+    metadata lies nowhere near the header is still recognised. A file that is not a conforming PE but starts with
+    `MZ` and carries the `BSJB` marker is accepted too: build fixtures and some packed assemblies look like that,
+    and the metadata reader remains the final judge.
+    """
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(1024 * 1024)     # PE headers live in the first few KiB; this bound is generous
     except OSError:
         return False
-    return head[:2] == b"MZ" and b"BSJB" in head
+    return _has_cli_header(head) or (head[:2] == b"MZ" and b"BSJB" in head)
 
 
 def _reader_sources_hash() -> str:
