@@ -71,7 +71,7 @@ class ReleaseModeTests(unittest.TestCase):
         # so these cases isolate receipt/archive validation from Git.
         with patch.object(core, "ROOT", self.root), patch("ror2forge.__version__", "1.2.3"), \
                 patch.object(core, "_ci_state", return_value=ci), \
-                patch.object(core, "_git_tree", return_value=expected), \
+                patch.object(core, "_expected_export", return_value=expected), \
                 self._git(stdout="v1.2.3", head=head):
             return core.release_check("release", assets)
 
@@ -271,3 +271,25 @@ class ReleaseModeTests(unittest.TestCase):
             published, _ = core._archive_tree(tampered, "kit/")
             problems = core._compare_tree(core._git_tree(commit), published)
         self.assertTrue(any("differs from the tag" in problem for problem in problems), problems)
+
+    def test_export_honours_gitattributes_line_endings(self):
+        repo = self.root / "repo2"
+        repo.mkdir()
+        env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e"}
+        def run(*a):
+            return subprocess.run(["git", *a], cwd=repo, capture_output=True, check=True, text=True, env=env)
+        run("init", "-q")
+        (repo / ".gitattributes").write_text("*.cmd text eol=crlf" + chr(10))
+        (repo / "run.cmd").write_bytes(b"echo hi" + bytes([10]))
+        run("add", "-A")
+        run("commit", "-qm", "one")
+        (repo / "run.cmd").write_bytes(b"echo hi" + bytes([13, 10]))   # the form Git exports for eol=crlf
+        archive = self.root / "kit2.zip"
+        subprocess.run(["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive", "--format=zip",
+                        "--prefix=kit/", "HEAD", "-o", str(archive)], cwd=repo, check=True)
+        with patch.object(core, "ROOT", repo):
+            expected = core._expected_export("HEAD", "kit/")
+            published, _ = core._archive_tree(archive, "kit/")
+        self.assertEqual(core._compare_tree(expected, published), [])
+        self.assertEqual(expected["run.cmd"], published["run.cmd"])

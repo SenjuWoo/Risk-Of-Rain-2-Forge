@@ -1026,6 +1026,26 @@ def _git_tree(commit: str) -> dict[str, str]:
     return tree
 
 
+def _expected_export(commit: str, prefix: str) -> dict[str, str]:
+    """The exact member bytes Git produces for a commit, keyed by path relative to the archive root.
+
+    Git applies `.gitattributes` rules when exporting (`*.ps1 eol=crlf` and friends), so comparing against raw blobs
+    would reject correct archives. Letting Git build the reference from the immutable commit — with line-ending
+    conversion pinned — keeps the comparison exact without re-implementing attribute matching here.
+    """
+    with tempfile.TemporaryDirectory() as scratch:
+        reference = Path(scratch) / "reference.zip"
+        result = subprocess.run(["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive",
+                                 "--format=zip", f"--prefix={prefix}", commit, "-o", str(reference)],
+                                cwd=ROOT, capture_output=True, timeout=300)
+        if result.returncode != 0:
+            raise ValueError(f"Cannot export the tagged tree: {result.stderr.decode(errors='replace').strip()}")
+        tree, problems = _archive_tree(reference, prefix)
+        if problems:
+            raise ValueError(f"Git's own export is unusable: {problems[0]}")
+        return tree
+
+
 def _archive_tree(path: Path, prefix: str) -> tuple[dict[str, str], list[str]]:
     """Blob hashes of archive members, keyed by path relative to the release root directory."""
     tree: dict[str, str] = {}
@@ -1239,7 +1259,7 @@ def release_check(mode: str = "prerelease", assets: str | Path | None = None) ->
                     asset_errors.append("cannot resolve the release tag to a commit, so the archive is unproven")
                 else:
                     try:
-                        expected = _git_tree(tag_commit)
+                        expected = _expected_export(tag_commit, f"Risk-of-Rain-2-Forge-{version}/")
                     except ValueError as error:
                         asset_errors.append(str(error))
                         expected = None

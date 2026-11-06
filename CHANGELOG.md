@@ -1,3 +1,12 @@
+# 1.13.10 — Compare against Git's real export, not raw blobs (2026-11-06)
+
+- `.gitattributes` forces `eol=crlf` for `*.ps1`/`*.cmd`, so a correct archive legitimately differs from the stored
+  blobs. Comparing blobs rejected those files. The reference is now Git's own export of the tagged commit
+  (`-c core.autocrlf=false -c core.eol=lf archive`), hashed member by member; a forged archive still cannot match,
+  because the reference is derived from the immutable commit, not from the artifact under test.
+- Regression test proves attribute-driven line endings are accepted and that any rewritten byte is still refused.
+- 180 tests. v1.13.9 is superseded (it rejected three correct `.ps1`/`.cmd` files).
+
 # 1.13.9 — Text archives must be exported without line-ending conversion (2026-11-06)
 
 - `git archive` applies the checkout's EOL conversion for `text=auto` files, so `core.autocrlf=false` alone still
