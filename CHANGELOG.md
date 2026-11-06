@@ -1,3 +1,28 @@
+# 1.13.3 — Project isolation, package snapshots and real release verification (2026-11-06)
+
+- Packaged inputs are validated against their **own project**, not the whole forge workspace. A link or junction
+  from `projects/Victim/` into `projects/Other/` used to satisfy `owned()` and ship another mod's bytes; every
+  packaged file is now checked for reparse points from the file up to its project root, then resolved and
+  re-checked against that root. Plain `..` traversal, absolute paths and case aliases are covered by the same
+  check.
+- Packaging writes from an **in-memory snapshot** taken after validation, then reads the staged archive back and
+  compares every member. Replacing the DLL, a content asset or the manifest during ZIP creation either lands the
+  original bytes in the archive or fails the package; the staging file is what gets promoted.
+- `release-check --mode release` now verifies the **published bytes**: it requires `SHA256SUMS`,
+  `BUILD-RECEIPT.json` and a source archive, rejects empty/malformed/duplicate/unsafe checksum entries, checks
+  every hash and size, requires the receipt to cover its artifact with a matching hash and commit, and reports
+  `checks.version/tag/assets` plus `release_verified` separately. A receipt with only a commit no longer passes;
+  no `--assets` means not release-verified.
+- `packages.lock.json` is hashed into the build receipt as `lock_sha256`; packaging refuses a changed lock, and
+  `--locked` refuses to run when no lock exists. This closes the case where the lock could change without
+  touching any digest.
+- `forge logs` (and therefore the MCP log tool) only reads discovered BepInEx logs and forge logs under
+  `artifacts/` or `logs/`; arbitrary files such as `VERSION` are refused, lines are capped at 4,000 characters
+  and files above 64 MiB are rejected.
+- The `procedural` template is now built, bumped and repackaged in `scripts/ci_smoke.py` and exposed through the
+  MCP `forge_new` tool, matching the CLI.
+- 19 new regression tests (161 total, 3 skipped where this Windows session cannot create links).
+
 # 1.13.2 — Lexer, ownership data and release modes (2026-11-06)
 
 - The C# scanner is one tested lexer instead of per-check regexes. It understands normal, verbatim (`@"…"`),

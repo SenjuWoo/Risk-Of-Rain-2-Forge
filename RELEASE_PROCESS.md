@@ -49,8 +49,11 @@ assets back and compare hashes; a release is not verified until the published by
 .venv/Scripts/python.exe forge.py release-check --mode release --assets <downloaded-folder>
 ```
 
-Release mode requires a single-`v` tag on HEAD, matching VERSION/package/changelog, and a receipt whose commit
-equals HEAD. Anything it cannot check is reported as unknown, never as a pass.
+Release mode requires a single-`v` tag on HEAD, matching VERSION/package/changelog, and — with `--assets` — the
+published files themselves: every `SHA256SUMS` entry must be well formed, unique, inside the folder, and match the
+file's bytes and the receipt's claimed artifact hash/size, with the receipt commit equal to HEAD. It reports
+`checks.version`, `checks.tag`, `checks.assets` and `release_verified` separately; a missing asset folder is
+`not release-verified`, never a pass. CI runs prerelease mode on every push; the tag workflow runs release mode.
 
 ## Compatibility statement
 

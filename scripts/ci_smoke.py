@@ -18,7 +18,7 @@ def forge(*args):
 
 
 def main():
-    for name, template in (("CIPlugin", "plugin"), ("CIStats", "stats")):
+    for name, template in (("CIPlugin", "plugin"), ("CIStats", "stats"), ("CIProcedural", "procedural")):
         forge("new", name, "--author", "ForgeCI", "--template", template)
         source = ROOT / "projects" / name / "src/Plugin.cs"
         source.write_text(source.read_text(encoding="utf-8").replace("PluginVersion = ", "PluginVersion="), encoding="utf-8")
