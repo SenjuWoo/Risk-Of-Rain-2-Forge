@@ -50,10 +50,14 @@ assets back and compare hashes; a release is not verified until the published by
 ```
 
 Release mode requires a single-`v` tag on HEAD, matching VERSION/package/changelog, and — with `--assets` — the
-published files themselves: every `SHA256SUMS` entry must be well formed, unique, inside the folder, and match the
+published files themselves. The archive must be a real ZIP named `Risk-of-Rain-2-Forge-<version>-source.zip`; the
+receipt must be an object with `commit`, `artifact{file,sha256,size_bytes,files}` and a non-empty `ci_checks` list;
+checksums must be well formed, unique, inside the folder, and match bytes and sizes: every `SHA256SUMS` entry must be well formed, unique, inside the folder, and match the
 file's bytes and the receipt's claimed artifact hash/size, with the receipt commit equal to HEAD. It reports
 `checks.version`, `checks.tag`, `checks.assets` and `release_verified` separately; a missing asset folder is
-`not release-verified`, never a pass. CI runs prerelease mode on every push; the tag workflow runs release mode.
+`not release-verified`, never a pass. `checks.ci` is read independently from the repository's check-runs for the exact commit; nothing in the receipt is
+trusted for CI. `release_verified` requires it to be `verified`. CI runs prerelease mode on every push; the tag
+workflow runs release mode; `release-published.yml` re-verifies the downloaded bytes after publication.
 
 ## Compatibility statement
 

@@ -1,3 +1,24 @@
+# 1.13.6 — Trustworthy release proof, hardlinks and bounded packaging (2026-11-06)
+
+- `release-check --mode release --assets` now refuses fabrications instead of trusting a matching checksum:
+  the receipt must be a JSON object with `commit`, an `artifact` object carrying `file`/`sha256`/`size_bytes`/`files`
+  of the right types, and a non-empty `ci_checks` list whose conclusions are all `success`; the published archive
+  must be named `Risk-of-Rain-2-Forge-<version>-source.zip`, must really be a ZIP, and must pass CRC, duplicate,
+  unsafe-path, member-count and expansion checks. A text file with the right hash, `{}`, `[]`, and a receipt
+  claiming failed CI all fail.
+- CI evidence is now independent: `checks.ci` is `verified`, `failed`, `pending` or `unknown`, read from the
+  repository's check-runs for the exact commit via `gh`, never from the receipt. `release_verified` requires
+  `verified`; a fabricated "success" with no reachable CI is `not verified`, not a pass.
+- Packaging reads through one verified handle (`ror2forge/safefs.py`): `O_NOFOLLOW` on the final component,
+  `st_nlink` hardlink rejection, and a bounded read from the same descriptor. A file swapped to a link between
+  path validation and reading can no longer smuggle another project's bytes, and a hardlink to another project's
+  file is refused with an explicit message.
+- Packaging has quotas: files, per-file and total bytes are charged before content is read, so an oversized tree
+  fails before memory grows. Limits: 10,000 files, 256 MiB per file, 1 GiB total.
+- A lockfile present without `lock_sha256` in the receipt is refused (the old optional-field check let a receipt
+  omit lock provenance entirely).
+- 18 new regression tests across `tests/test_release_contract.py` and `tests/test_security.py`.
+
 # 1.13.5 — Ownership corrections for declared classes and ContentAddition (2026-11-06)
 
 - A mod that declares its own `class SkillsAPI {}` is no longer treated as using R2API.Skills; the bare-name
