@@ -811,13 +811,21 @@ def audit_project(root: str | Path) -> dict:
 
     # 10. the compiled assembly is the authority: a reference the source scanner cannot see (extension methods
     # reached through a using static, a type alias, reflection-free API calls) still needs its Thunderstore package.
-    assembly = {"status": "skipped", "reason": "no compiled assembly under build/bin"}
-    built = sorted((root / "build/bin").glob("*.dll"), key=lambda p: p.stat().st_mtime) if (root / "build/bin").is_dir() else []
-    if built:
+    target, why = _built_assembly(root, manifest.get("name", ""))
+    assembly = {"status": "skipped", "reason": why}
+    if target is not None and not _looks_managed(target):
+        # A cheap pre-filter, not a parser: without the CLI signature there is no metadata to read, and inventing
+        # an error for it would fail every fixture that stands in for a build with a stub file.
+        assembly = {"status": "skipped", "reason": "the built file carries no CLI metadata"}
+    elif target is not None:
         try:
-            assembly = assembly_refs(built[-1])
+            assembly = assembly_refs(target)
+        except ToolchainMissing as error:
+            assembly = {"status": "unavailable", "reason": str(error), "candidate": str(target)}
         except ValueError as error:
-            assembly = {"status": "unavailable", "reason": str(error)}
+            # The reader was available and refused the file: that is a real defect, not a missing toolchain.
+            assembly = {"status": "invalid", "reason": str(error), "candidate": str(target)}
+            errors.append(f"compiled assembly could not be inspected: {error}")
         if assembly.get("status") == "ok":
             for ref in assembly["references"]:
                 name = ref["name"]
@@ -836,28 +844,108 @@ def audit_project(root: str | Path) -> dict:
             "valid": not errors}
 
 
-ASMREFS_PROJECT = ROOT / "src/AsmRefs/AsmRefs.csproj"
-ASMREFS_DLL = ROOT / "build/tools/asmrefs/asmrefs.dll"
+class ToolchainMissing(RuntimeError):
+    """No .NET SDK/runtime, or the reader could not be built. Advisory, never a failed audit."""
+
+
+# The reader belongs to this checkout, not to the mod under audit: derive it from the package location, because
+# tests (and callers) patch ROOT to a project directory.
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+ASMREFS_PROJECT = PACKAGE_ROOT / "src/AsmRefs/AsmRefs.csproj"
+ASMREFS_DLL = PACKAGE_ROOT / "build/tools/asmrefs/asmrefs.dll"
+ASMREFS_STAMP = PACKAGE_ROOT / "build/tools/asmrefs/.source-sha256"
+
+
+def _built_assembly(root: Path, manifest_name: str) -> tuple[Path | None, str]:
+    """The exact DLL the build produced, by identity rather than timestamp.
+
+    The build receipt records it; failing that, the project directory name and the manifest name are the only
+    identities we can defend. Two unexplained DLLs is an ambiguity, not an invitation to guess.
+    """
+    receipt_path = root / "build/receipt.json"
+    receipt = read_json(receipt_path) if receipt_path.is_file() else {}
+    recorded = receipt.get("assembly")
+    if recorded:
+        path = Path(recorded)
+        path = path if path.is_absolute() else (root / path)
+        if path.is_file() and _within(root, path):
+            return path, ""
+        return None, f"the build receipt names {recorded}, which is not in this project"
+    built = sorted((root / "build/bin").glob("*.dll")) if (root / "build/bin").is_dir() else []
+    if not built:
+        return None, "no compiled assembly under build/bin"
+    for name in (root.name, manifest_name):
+        match = [p for p in built if p.stem.lower() == name.lower()]
+        if len(match) == 1:
+            return match[0], ""
+    if len(built) == 1:
+        return built[0], ""
+    return None, ("build/bin holds several assemblies and none matches the project or manifest name: "
+                  + ", ".join(p.name for p in built[:5]))
+
+
+def _within(root: Path, path: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _looks_managed(path: Path) -> bool:
+    """True when the file is a PE image that advertises a CLI metadata block ('BSJB')."""
+    try:
+        head = path.open("rb").read(4 * 1024 * 1024)
+    except OSError:
+        return False
+    return head[:2] == b"MZ" and b"BSJB" in head
+
+
+def _reader_sources_hash() -> str:
+    """One hash over the reader's inputs, so a changed reader never hides behind a stale binary."""
+    digest = hashlib.sha256()
+    for path in (ASMREFS_PROJECT, ASMREFS_PROJECT.parent / "Program.cs"):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def _ensure_reader() -> None:
+    """Build the metadata reader when it is missing or was built from different sources."""
+    if not ASMREFS_PROJECT.is_file():
+        raise ToolchainMissing("the assembly reader is missing from this checkout")
+    wanted = _reader_sources_hash()
+    if ASMREFS_DLL.is_file() and ASMREFS_STAMP.is_file() and ASMREFS_STAMP.read_text().strip() == wanted:
+        return
+    if not shutil.which("dotnet"):
+        raise ToolchainMissing("no .NET SDK on PATH")
+    try:
+        built = subprocess.run(["dotnet", "build", str(ASMREFS_PROJECT), "-c", "Release",
+                                "-o", str(ASMREFS_DLL.parent), "-nologo", "-v", "q"],
+                               cwd=PACKAGE_ROOT, capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ToolchainMissing(f"cannot start dotnet: {error}") from error
+    if built.returncode != 0 or not ASMREFS_DLL.is_file():
+        raise ToolchainMissing("cannot build the assembly reader: " + (built.stdout or built.stderr).strip()[:200])
+    ASMREFS_STAMP.write_text(wanted)
 
 
 def assembly_refs(dll: str | Path) -> dict:
     """Assembly references of a built mod, read as bytes: the DLL is never loaded or executed.
 
     System.Reflection.Metadata does the parsing, so this is authoritative where the source scanner is advisory.
-    Returns {"status": "unavailable"} rather than failing an audit when no .NET SDK is present.
+    Raises ToolchainMissing when no SDK is available (advisory) and ValueError when the file is not a managed
+    assembly (a real defect the caller must report).
     """
     dll = Path(dll).resolve()
     if not dll.is_file():
         raise ValueError(f"no assembly at {dll}")
-    if not ASMREFS_DLL.is_file():
-        if not ASMREFS_PROJECT.is_file():
-            raise ValueError("the assembly reader is missing from this checkout")
-        build = subprocess.run(["dotnet", "build", str(ASMREFS_PROJECT), "-c", "Release",
-                                "-o", str(ASMREFS_DLL.parent), "-nologo", "-v", "q"],
-                               cwd=ROOT, capture_output=True, text=True, timeout=300)
-        if build.returncode != 0 or not ASMREFS_DLL.is_file():
-            raise ValueError("cannot build the assembly reader: " + (build.stdout or build.stderr).strip()[:200])
-    run = subprocess.run(["dotnet", str(ASMREFS_DLL), str(dll)], cwd=ROOT, capture_output=True, text=True, timeout=120)
+    _ensure_reader()
+    try:
+        run = subprocess.run(["dotnet", str(ASMREFS_DLL), str(dll)], cwd=PACKAGE_ROOT, capture_output=True,
+                             text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ToolchainMissing(f"cannot run the assembly reader: {error}") from error
     if run.returncode != 0:
         raise ValueError((run.stderr or run.stdout).strip()[:200] or "assembly reader failed")
     payload = json.loads(run.stdout)
