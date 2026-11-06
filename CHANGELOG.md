@@ -1,3 +1,16 @@
+# 1.14.0 — The compiled assembly decides R2API dependencies (2026-11-06)
+
+- `forge audit` now reads the built DLL's assembly references with `System.Reflection.Metadata`
+  (`tools/AsmRefs`, built on demand into `build/tools/asmrefs`) and fails when a referenced `R2API.*` assembly has no
+  matching `RiskofThunder-R2API_*` dependency. The source scanner cannot see an extension method reached through
+  `using static`, an alias, or a type that is only named at the call site; the metadata table can.
+- The DLL is parsed as bytes and never loaded or executed. If no .NET SDK is present the audit records
+  `assembly.status = unavailable` and stays advisory instead of failing — a missing toolchain must not block a check.
+- `audit` reports an `assembly` block (status, name, version, references) alongside the existing source findings.
+- 8 regression tests: missing package is an error, declared package passes, `R2API` maps to `R2API_Core`, non-R2API
+  references are ignored, unreadable/mock DLLs degrade honestly, and the reader refuses a file that is not a managed
+  assembly.
+
 # 1.13.10 — Compare against Git's real export, not raw blobs (2026-11-06)
 
 - `.gitattributes` forces `eol=crlf` for `*.ps1`/`*.cmd`, so a correct archive legitimately differs from the stored
