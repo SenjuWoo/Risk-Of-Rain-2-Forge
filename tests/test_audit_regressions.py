@@ -148,8 +148,9 @@ class AuditRegressionTests(unittest.TestCase):
 
     def test_commented_audio_event_is_not_played(self):
         mod = self._mod({"A.cs": '// var sound = "Play_Deleted";' + chr(10) + 'class P { void A(){ Play("Play_Real"); } }'})
-        (mod / "package" / "assets").mkdir(parents=True, exist_ok=True)
-        (mod / "package" / "assets" / "events.txt").write_text("# key=files" + chr(10) + "Play_Real=1.wav" + chr(10), encoding="utf-8")
+        (mod / "content" / "assets").mkdir(parents=True, exist_ok=True)
+        (mod / "content" / "assets" / "events.txt").write_text("# key=files" + chr(10) + "Play_Real=1.wav" + chr(10), encoding="utf-8")
+        (mod / "content" / "assets" / "1.wav").write_bytes(b"RIFF")
         result = core.audit_project(mod)
         self.assertTrue(result["valid"], result["errors"])
 
@@ -172,8 +173,8 @@ class AuditRegressionTests(unittest.TestCase):
         source = ('class P { void A(){ var p = @"C:\\tmp//x"; var q = "he said \\"Play_Deleted\\""; '
                   'using_files(); } }')
         mod = self._mod({"S.cs": source})
-        (mod / "package" / "assets").mkdir(parents=True, exist_ok=True)
-        (mod / "package" / "assets" / "events.txt").write_text("# key=files" + chr(10), encoding="utf-8")
+        (mod / "content" / "assets").mkdir(parents=True, exist_ok=True)
+        (mod / "content" / "assets" / "events.txt").write_text("# key=files" + chr(10), encoding="utf-8")
         result = core.audit_project(mod)
         self.assertTrue(result["valid"], result["errors"])
 
@@ -199,13 +200,14 @@ class AuditRegressionTests(unittest.TestCase):
             self.assertIn("build again", str(raised.exception))
 
     def test_release_check_reports_every_version_place(self):
-        result = core.release_check()
+        result = core.release_check("prerelease")
         self.assertEqual(result["version"], result["package_version"])
         self.assertEqual(result["changelog"], result["version"])
         self.assertEqual(result["valid"], not result["errors"])
-        # A tag that points at another version must be reported, never silently accepted.
-        if result["tag"] and result["tag"] != result["version"]:
-            self.assertIn("tag", result["errors"][0])
+        self.assertIn(result["tag_status"], {"ok", "absent", "not_required", "unknown", "mismatch", "malformed", "stale"})
+        # A tag naming another version is a warning here, not a pass that hides it.
+        if result["tag_status"] == "stale":
+            self.assertTrue(result["warnings"], "a stale tag must be reported")
 
 
 if __name__ == "__main__":

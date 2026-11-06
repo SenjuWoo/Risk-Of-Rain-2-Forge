@@ -121,3 +121,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [the roadmap](docs/ROADMAP.md), [the cha
 New packages are local candidates. The forge never installs into an active profile or uploads to Thunderstore. It refuses stale builds and different bytes under an existing artifact version; bump all version fields to create a changed release. Arbitrary custom MSBuild scripts/imports can execute code: build trusted owned source and record external inputs explicitly.
 
 Original forge code is MIT; bundled third-party tools retain their own terms. Local installation does not establish permission to redistribute every tool; see [THIRD_PARTY.md](THIRD_PARTY.md).
+
+Cutting or verifying a release: see [RELEASE_PROCESS.md](RELEASE_PROCESS.md).

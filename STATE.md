@@ -1,6 +1,6 @@
 # Risk of Rain 2 Forge — verified handoff
 
-- Version: **1.13.1** (provenance required — legacy receipts refused; audit reads comment-stripped source for version and audio checks; qualified `R2API.X` maps through known namespace/type tables instead of inventing modules; texture warning paired per texture; `forge release-check`; 120 tests).
+- Version: **1.13.2** — lexer rewrite (all C# literal forms), R2API ownership as data with a refresh script, `R2API.SkillsAPI` correctly owned by Skills, release-check prerelease/release modes wired into CI and a tag workflow, build provenance across compilation, audio maps validated in `content/`. 141 tests. Earlier bullets below keep the version they were written under.
 - Goal: give any agent current tools, exact API inspection, tested templates and an efficient modding playbook.
 - User preference: CLI by default. MCP is optional, unregistered globally and never auto-started. No personal agent config/model choices changed.
 - Entry: `forge.cmd doctor`, `forge.cmd guide`, `AGENTS.md`. Source modules in ror2forge/, templates in templates/, reusable skill in skills/ror2-forge/.
