@@ -41,6 +41,8 @@ def parser() -> argparse.ArgumentParser:
     inspect.add_argument("--member", help="Decompile only this exact XML member ID/token to save context")
     package = commands.add_parser("package", help="Package only this mod's own DLL and package metadata")
     package.add_argument("name")
+    package.add_argument("--skip-audit", action="store_true",
+                         help="Package even if the project audit reports blocking findings (recorded in the result)")
     validate = commands.add_parser("validate", help="Inspect a Thunderstore ZIP without extracting it")
     validate.add_argument("archive")
     audit = commands.add_parser("audit", help="Cross-check R2API usage and BepInDependency GUIDs against the manifest")
@@ -80,7 +82,7 @@ def main(argv=None) -> int:
             from .project_ops import bump
             value = bump(args.name, args.target)
         elif args.command == "package":
-            value = core.package_mod(args.name)
+            value = core.package_mod(args.name, skip_audit=args.skip_audit)
         elif args.command == "audit":
             value = core.audit_project(args.project)
         elif args.command == "validate":
