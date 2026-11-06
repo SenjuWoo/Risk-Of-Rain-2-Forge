@@ -1,6 +1,6 @@
 # Risk of Rain 2 Forge — verified handoff
 
-- Version: **1.14.1** — compiled-assembly audit with honest no-SDK handling and identity-based DLL selection, published source equals the tag. 191 tests (3 skipped locally).
+- Version: **1.14.2** — header-based managed-PE detection, no leaked handles, compiled-assembly audit with honest no-SDK handling. 197 tests (3 skipped locally).
 - Goal: give any agent current tools, exact API inspection, tested templates and an efficient modding playbook.
 - User preference: CLI by default. MCP is optional, unregistered globally and never auto-started. No personal agent config/model choices changed.
 - Entry: `forge.cmd doctor`, `forge.cmd guide`, `AGENTS.md`. Source modules in ror2forge/, templates in templates/, reusable skill in skills/ror2-forge/.
