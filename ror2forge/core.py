@@ -809,11 +809,60 @@ def audit_project(root: str | Path) -> dict:
             if warning not in warnings:
                 warnings.append(warning)
 
+    # 10. the compiled assembly is the authority: a reference the source scanner cannot see (extension methods
+    # reached through a using static, a type alias, reflection-free API calls) still needs its Thunderstore package.
+    assembly = {"status": "skipped", "reason": "no compiled assembly under build/bin"}
+    built = sorted((root / "build/bin").glob("*.dll"), key=lambda p: p.stat().st_mtime) if (root / "build/bin").is_dir() else []
+    if built:
+        try:
+            assembly = assembly_refs(built[-1])
+        except ValueError as error:
+            assembly = {"status": "unavailable", "reason": str(error)}
+        if assembly.get("status") == "ok":
+            for ref in assembly["references"]:
+                name = ref["name"]
+                if not name.startswith("R2API"):
+                    continue
+                module = name.split(".", 1)[1] if "." in name else "Core"
+                if _norm(R2API_CORE_NAMESPACES.get(name, module)) not in declared:
+                    errors.append(f"compiled assembly references {name} but no RiskofThunder-R2API_{module} "
+                                  f"dependency is declared in {manifest_path.name}")
+
     return {"root": str(root), "manifest": str(manifest_path), "sources": len(sources),
             "r2api_modules": sorted(imports),
         "r2api_unresolved": sorted(unresolved), "dependency_guids": sorted(guids),
-            "dependencies_declared": len(declared_full), "errors": errors, "warnings": warnings,
+            "dependencies_declared": len(declared_full), "assembly": assembly,
+            "errors": errors, "warnings": warnings,
             "valid": not errors}
+
+
+ASMREFS_PROJECT = ROOT / "src/AsmRefs/AsmRefs.csproj"
+ASMREFS_DLL = ROOT / "build/tools/asmrefs/asmrefs.dll"
+
+
+def assembly_refs(dll: str | Path) -> dict:
+    """Assembly references of a built mod, read as bytes: the DLL is never loaded or executed.
+
+    System.Reflection.Metadata does the parsing, so this is authoritative where the source scanner is advisory.
+    Returns {"status": "unavailable"} rather than failing an audit when no .NET SDK is present.
+    """
+    dll = Path(dll).resolve()
+    if not dll.is_file():
+        raise ValueError(f"no assembly at {dll}")
+    if not ASMREFS_DLL.is_file():
+        if not ASMREFS_PROJECT.is_file():
+            raise ValueError("the assembly reader is missing from this checkout")
+        build = subprocess.run(["dotnet", "build", str(ASMREFS_PROJECT), "-c", "Release",
+                                "-o", str(ASMREFS_DLL.parent), "-nologo", "-v", "q"],
+                               cwd=ROOT, capture_output=True, text=True, timeout=300)
+        if build.returncode != 0 or not ASMREFS_DLL.is_file():
+            raise ValueError("cannot build the assembly reader: " + (build.stdout or build.stderr).strip()[:200])
+    run = subprocess.run(["dotnet", str(ASMREFS_DLL), str(dll)], cwd=ROOT, capture_output=True, text=True, timeout=120)
+    if run.returncode != 0:
+        raise ValueError((run.stderr or run.stdout).strip()[:200] or "assembly reader failed")
+    payload = json.loads(run.stdout)
+    payload["status"] = "ok"
+    return payload
 
 
 _ATTACK = re.compile(r"\bnew\s+(?:BulletAttack|BlastAttack|OverlapAttack)\b")
