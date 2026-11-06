@@ -1,9 +1,10 @@
 {
   "source": "https://github.com/risk-of-thunder/R2API",
   "ref": "master",
+  "commit": "b0ad023cc271b28f24a0d498ac7081947f826823",
   "upstream_pushed_at": "2026-10-30T21:23:00Z",
   "generated": "2026-11-06",
-  "method": "derived from the repository tree: module directories plus root-level <Type>API.cs files",
+  "method": "derived from the pinned commit's tree: module directories plus root-level <Type>API.cs files",
   "modules": [
     "Addressables",
     "Animations",
@@ -49,6 +50,7 @@
     "BuffsAPI": "Buffs",
     "CharacterBodyAPI": "CharacterBody",
     "ColorsAPI": "Colors",
+    "ContentAddition": "ContentManagement",
     "DamageAPI": "DamageType",
     "DeployableAPI": "Deployable",
     "DifficultyAPI": "Difficulty",
@@ -72,10 +74,12 @@
     "SoundAPI": "Sound",
     "TeamsAPI": "Teams",
     "TempVisualEffectAPI": "TempVisualEffect",
-    "UnlockableAPI": "Unlockable",
-    "ContentAddition": "ContentManagement"
+    "UnlockableAPI": "Unlockable"
   },
   "curated": {
+    "ContentAddition": "ContentManagement"
+  },
+  "curated_sources": {
     "ContentAddition": "https://github.com/risk-of-thunder/R2API/blob/master/R2API.ContentManagement/ContentAddition.cs"
   }
 }

@@ -909,7 +909,7 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
         # Boundary check first, then one verified open: the bytes come from the same handle that was checked,
         # so swapping the path to a link, or hardlinking another project's file, cannot get past this.
         resolved = project_input(folder, source)
-        payload[archive_name] = read_bounded(resolved, budget, archive_name)
+        payload[archive_name] = read_bounded(resolved, budget, archive_name, folder)
 
     take("manifest.json", folder / "manifest.json")
     take("README.md", folder / "README.md")
@@ -1005,6 +1005,59 @@ def _ci_state(commit: str) -> tuple[str, list[str]]:
     if any((run.get("conclusion") or "") != "success" for run in relevant):
         return "failed", names
     return "verified", names
+
+
+def _git_tree(commit: str) -> dict[str, str]:
+    """Blob hashes of every tracked file at a commit, as Git itself computes them."""
+    result = subprocess.run(["git", "ls-tree", "-r", "-z", "--full-tree", commit], cwd=ROOT,
+                            capture_output=True, timeout=120)
+    if result.returncode != 0:
+        raise ValueError(f"Cannot read the tagged tree: {result.stderr.decode(errors='replace').strip()}")
+    tree: dict[str, str] = {}
+    payload = result.stdout if isinstance(result.stdout, bytes) else result.stdout.encode()
+    for entry in payload.split(b"\0"):
+        if not entry:
+            continue
+        meta, _, path = entry.partition(b"\t")
+        parts = meta.split()
+        if len(parts) < 3 or parts[1] != b"blob":
+            continue
+        tree[path.decode("utf-8", "surrogateescape")] = parts[2].decode()
+    return tree
+
+
+def _archive_tree(path: Path, prefix: str) -> tuple[dict[str, str], list[str]]:
+    """Blob hashes of archive members, keyed by path relative to the release root directory."""
+    tree: dict[str, str] = {}
+    problems: list[str] = []
+    with zipfile.ZipFile(path) as archive:
+        for member in archive.infolist():
+            if member.is_dir():
+                continue
+            name = member.filename
+            if not name.startswith(prefix):
+                problems.append(f"archive member outside the release root: {name}")
+                continue
+            data = archive.read(member)
+            tree[name[len(prefix):]] = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+    return tree, problems
+
+
+def _compare_tree(expected: dict[str, str], actual: dict[str, str]) -> list[str]:
+    """Every published file must exist in the tag with identical bytes, and nothing else may be added."""
+    problems: list[str] = []
+    missing = sorted(set(expected) - set(actual))
+    extra = sorted(set(actual) - set(expected))
+    changed = sorted(name for name in set(expected) & set(actual) if expected[name] != actual[name])
+    for name in missing[:5]:
+        problems.append(f"tagged file missing from the release archive: {name}")
+    for name in extra[:5]:
+        problems.append(f"release archive contains a file the tag does not: {name}")
+    for name in changed[:5]:
+        problems.append(f"release archive content differs from the tag: {name}")
+    if len(missing) + len(extra) + len(changed) > 15:
+        problems.append(f"{len(missing) + len(extra) + len(changed)} files differ from the tag in total")
+    return problems
 
 
 def _check_source_archive(path: Path, expected_files: int | None) -> list[str]:
@@ -1179,6 +1232,25 @@ def release_check(mode: str = "prerelease", assets: str | Path | None = None) ->
             source = folder / expected_name
             if source.is_file():
                 asset_errors.extend(_check_source_archive(source, artifact.get("files")))
+                # A correct structure and checksum prove nothing about the content: compare every byte to the tag.
+                tag_commit = subprocess.run(["git", "rev-parse", f"{tag_name}^{{commit}}"], cwd=ROOT,
+                                            capture_output=True, text=True, timeout=30).stdout.strip()
+                if not tag_commit:
+                    asset_errors.append("cannot resolve the release tag to a commit, so the archive is unproven")
+                else:
+                    try:
+                        expected = _git_tree(tag_commit)
+                    except ValueError as error:
+                        asset_errors.append(str(error))
+                        expected = None
+                    if expected is not None:
+                        try:
+                            published, stray = _archive_tree(source, f"Risk-of-Rain-2-Forge-{version}/")
+                        except (zipfile.BadZipFile, OSError, RuntimeError):
+                            asset_errors.append("source archive could not be read for content comparison")
+                        else:
+                            asset_errors.extend(stray)
+                            asset_errors.extend(_compare_tree(expected, published))
             actual = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
                                     text=True, timeout=20).stdout.strip()
             if not receipt.get("commit"):

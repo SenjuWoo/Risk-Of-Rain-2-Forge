@@ -1,3 +1,21 @@
+# 1.13.8 — Published source must equal the tag; handle-proven reads (2026-11-06)
+
+- A release archive is now compared, byte for byte, to the tagged commit: `git ls-tree` gives the blob hash of every
+  tracked file, the ZIP is re-hashed with Git's blob formula, and missing, added or altered files are errors. A
+  fabricated ZIP with the right name, entry count and checksum therefore fails. Verified against a real temporary
+  repository as well as with supplied trees.
+- Release archives must be built with `git -c core.autocrlf=false archive`, otherwise Git exports CRLF in the ZIP and
+  the tree comparison correctly reports every text file as changed. Documented in `RELEASE_PROCESS.md`.
+- Packaging reads are now proven from a handle, not a path (`safefs.read_bounded(path, budget, name, root)`):
+  Windows uses `CreateFileW` with `FILE_FLAG_OPEN_REPARSE_POINT` plus `GetFinalPathNameByHandleW` and refuses a file
+  whose real path has left the project; POSIX walks directory descriptors with `O_NOFOLLOW`/`O_DIRECTORY` and opens
+  the file relative to the last one. Renaming a directory and replacing it with a junction no longer redirects a
+  read that was validated earlier — the reported reproduction now raises instead of returning foreign bytes.
+- `refresh_r2api_ownership.py` pins an upstream commit SHA, refuses a truncated tree, applies curated mappings after
+  derivation (they were previously persisted without ever reaching the type map), and migrates the legacy
+  URL-valued `curated` section into `curated_sources` provenance.
+- 9 new regression tests; 178 total.
+
 # 1.13.7 — CI evidence counts only the checks that gate a release (2026-11-06)
 
 - `_ci_state` now evaluates an explicit `REQUIRED_CHECKS` set (`Windows tests and mod builds`, `CodeQL`). Release

@@ -1,6 +1,7 @@
 """Release-mode fixtures and adversarial cases for the strict verification contract."""
-import io
+import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -60,9 +61,18 @@ class ReleaseModeTests(unittest.TestCase):
         (assets / "SHA256SUMS").write_text("\n".join(sums), encoding="utf-8")
         return assets
 
-    def _release(self, assets, head="deadbeef", ci=("verified", ["CI:success"])):
+    @staticmethod
+    def _blob(data: bytes) -> str:
+        return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+    def _release(self, assets, head="deadbeef", ci=("verified", ["CI:success"]), tree=None):
+        expected = tree if tree is not None else {"README.md": self._blob(b"hello")}
+        # The receipt contract and the tag comparison are exercised separately: here the tag's tree is supplied,
+        # so these cases isolate receipt/archive validation from Git.
         with patch.object(core, "ROOT", self.root), patch("ror2forge.__version__", "1.2.3"), \
-                patch.object(core, "_ci_state", return_value=ci), self._git(stdout="v1.2.3", head=head):
+                patch.object(core, "_ci_state", return_value=ci), \
+                patch.object(core, "_git_tree", return_value=expected), \
+                self._git(stdout="v1.2.3", head=head):
             return core.release_check("release", assets)
 
     # --- the legitimate case still passes
@@ -201,3 +211,57 @@ class ReleaseModeTests(unittest.TestCase):
         ]})
         with patch.object(core, "_repo_slug", return_value="o/r"),                 patch.object(core.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, payload, "")):
             self.assertEqual(core._ci_state("abc123")[0], "failed")
+
+    def test_published_bytes_must_match_the_tag(self):
+        self._project()
+        assets = self._publish()
+        result = self._release(assets, tree={"README.md": self._blob(b"different bytes")})
+        self.assertFalse(result["release_verified"])
+        self.assertIn("differs from the tag", " ".join(result["errors"]))
+
+    def test_a_file_the_tag_does_not_have_is_rejected(self):
+        self._project()
+        result = self._release(self._publish(), tree={})
+        self.assertFalse(result["release_verified"])
+        self.assertIn("the tag does not", " ".join(result["errors"]))
+
+    def test_a_tagged_file_missing_from_the_archive_is_rejected(self):
+        self._project()
+        result = self._release(self._publish(), tree={"README.md": self._blob(b"hello"), "src/x.cs": "0" * 40})
+        self.assertFalse(result["release_verified"])
+        self.assertIn("missing from the release archive", " ".join(result["errors"]))
+
+    def test_real_git_tree_comparison_accepts_the_tag_and_rejects_tampering(self):
+        repo = self.root / "repo"
+        repo.mkdir()
+        run = lambda *a: subprocess.run(["git", *a], cwd=repo, capture_output=True, check=True,
+                                        text=True, env={**os.environ,
+                                                        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+                                                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e"})
+        run("init", "-q")
+        (repo / "a.txt").write_text("alpha" + chr(10))
+        (repo / "b.txt").write_text("beta" + chr(10))
+        run("add", "-A")
+        run("commit", "-qm", "one")
+        run("tag", "v1.0.0")
+        commit = run("rev-parse", "HEAD").stdout.strip()
+        archive = self.root / "kit.zip"
+        subprocess.run(["git", "-c", "core.autocrlf=false", "archive", "--format=zip", "--prefix=kit/", commit,
+                        "-o", str(archive)], cwd=repo, check=True)
+        with patch.object(core, "ROOT", repo):
+            expected = core._git_tree(commit)
+            published, stray = core._archive_tree(archive, "kit/")
+        self.assertEqual(stray, [])
+        self.assertEqual(core._compare_tree(expected, published), [])
+
+        tampered = self.root / "tampered.zip"
+        with zipfile.ZipFile(archive) as source, zipfile.ZipFile(tampered, "w") as target:
+            for member in source.infolist():
+                data = source.read(member)
+                if member.filename.endswith("a.txt"):
+                    data = b"alpha, but rewritten" + bytes([10])
+                target.writestr(member.filename, data)
+        with patch.object(core, "ROOT", repo):
+            published, _ = core._archive_tree(tampered, "kit/")
+            problems = core._compare_tree(core._git_tree(commit), published)
+        self.assertTrue(any("differs from the tag" in problem for problem in problems), problems)
