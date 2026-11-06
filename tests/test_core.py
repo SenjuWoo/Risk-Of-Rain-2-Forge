@@ -322,7 +322,9 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(core.survivor_warnings(source), [])
 
     def test_audit_surfaces_survivor_warnings_without_failing(self):
-        mod = self._audit_mod([], 'class P { void A() { ContentAddition.AddSurvivorDef(s); } }')
+        # ContentAddition ships in R2API.ContentManagement, so the dependency must be declared to stay valid.
+        mod = self._audit_mod(["RiskofThunder-R2API_ContentManagement-1.0.9"],
+                              'class P { void A() { ContentAddition.AddSurvivorDef(s); } }')
         result = core.audit_project(mod)
         self.assertTrue(result["valid"], result["errors"])
         self.assertEqual(len(result["warnings"]), 1)

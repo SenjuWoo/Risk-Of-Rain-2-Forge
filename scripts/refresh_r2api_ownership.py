@@ -35,6 +35,18 @@ def main():
         if name.endswith("API"):
             types[name] = module
     types["R2API"] = "Core"
+    # Module-root classes that are not named *API.cs. Each entry is checked against upstream by hand.
+    curated = {"ContentAddition": "ContentManagement"}
+    for name, module in curated.items():
+        types[name] = module
+    existing = {}
+    target_old = pathlib.Path(__file__).resolve().parents[1] / "ror2forge/r2api_ownership.json"
+    if target_old.is_file():
+        try:
+            existing = json.loads(target_old.read_text(encoding="utf-8")).get("curated", {})
+        except ValueError:
+            existing = {}
+    curated.update(existing)
     target = pathlib.Path(__file__).resolve().parents[1] / "ror2forge/r2api_ownership.json"
     target.write_text(json.dumps({
         "source": "https://github.com/risk-of-thunder/R2API",
@@ -44,6 +56,7 @@ def main():
         "method": "derived from the repository tree: module directories plus root-level <Type>API.cs files",
         "modules": sorted(modules),
         "types": dict(sorted(types.items())),
+        "curated": dict(sorted(curated.items())),
     }, indent=2) + "\n", encoding="utf-8")
     print(f"{len(modules)} modules, {len(types)} types -> {target}")
 

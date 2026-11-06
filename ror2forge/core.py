@@ -723,7 +723,9 @@ def audit_project(root: str | Path) -> dict:
         for known, module in R2API_TYPE_MODULES.items():
             if known == "R2API":        # the root static class doubles as the namespace prefix
                 continue
-            if re.search(rf"(?<!\.)\b{known}\b", text):
+            # A mod that declares its own class of that name is not referencing R2API.
+            declares_own = re.search(rf"\b(?:class|struct|interface|enum|record)\s+{known}\b", text)
+            if not declares_own and re.search(rf"(?<!\.)\b{known}\b", text):
                 imports.add(module)
         # A qualified `R2API.X` is a namespace when X is a module, a type when X is a known API class;
         # anything else is recorded as unresolved instead of being guessed into a package name.

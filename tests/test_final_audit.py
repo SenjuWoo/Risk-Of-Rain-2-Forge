@@ -115,6 +115,21 @@ class OwnershipTests(Fixture):
         self.assertIn("SkillsAPI", doc["types"])
         self.assertEqual(doc["types"]["SkillsAPI"], "Skills")
 
+    def test_a_mod_declaring_its_own_class_is_not_an_r2api_reference(self):
+        source = 'class SkillsAPI { }' + chr(10) + 'class P { void M(){ new SkillsAPI(); } }'
+        self.assertTrue(core.audit_project(self.mod({'S.cs': source}))['valid'])
+
+    def test_content_addition_requires_content_management(self):
+        source = 'using R2API;' + chr(10) + 'class P { void M(){ ContentAddition.AddItemDef(x); } }'
+        result = core.audit_project(self.mod({'S.cs': source}))
+        self.assertFalse(result['valid'])
+        self.assertIn('ContentManagement', result['errors'][0])
+
+    def test_content_addition_passes_with_its_package(self):
+        source = 'using R2API;' + chr(10) + 'class P { void M(){ ContentAddition.AddItemDef(x); } }'
+        mod = self.mod({'S.cs': source}, ['RiskofThunder-R2API_ContentManagement-1.0.9'])
+        self.assertTrue(core.audit_project(mod)['valid'])
+
 
 class ReleaseModeTests(Fixture):
     def _project(self, version="1.2.3", changelog="# 1.2.3 — x\n"):
