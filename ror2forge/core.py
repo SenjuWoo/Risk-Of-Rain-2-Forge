@@ -836,7 +836,7 @@ def audit_project(root: str | Path) -> dict:
             "valid": not errors}
 
 
-ASMREFS_PROJECT = ROOT / "tools/AsmRefs/AsmRefs.csproj"
+ASMREFS_PROJECT = ROOT / "src/AsmRefs/AsmRefs.csproj"
 ASMREFS_DLL = ROOT / "build/tools/asmrefs/asmrefs.dll"
 
 
