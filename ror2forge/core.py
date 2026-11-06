@@ -974,6 +974,11 @@ def _repo_slug() -> str | None:
     return f"{match.group(1)}/{match.group(2)}" if match else None
 
 
+# Only these decide whether a commit is safe to release. The release workflows themselves are excluded:
+# a job cannot be required to observe its own successful conclusion.
+REQUIRED_CHECKS = ("Windows tests and mod builds", "CodeQL")
+
+
 def _ci_state(commit: str) -> tuple[str, list[str]]:
     """Independent CI evidence for a commit: verified, failed, pending or unknown. Never trusts a receipt."""
     slug = _repo_slug()
@@ -990,12 +995,14 @@ def _ci_state(commit: str) -> tuple[str, list[str]]:
         runs = json.loads(result.stdout).get("check_runs", [])
     except ValueError:
         return "unknown", []
-    names = [f"{run.get('name')}:{run.get('conclusion')}" for run in runs if isinstance(run, dict)]
-    if not runs:
-        return "unknown", []
-    if any((run.get("status") or "") != "completed" for run in runs if isinstance(run, dict)):
+    relevant = [run for run in runs if isinstance(run, dict)
+                and any((run.get("name") or "").startswith(required) for required in REQUIRED_CHECKS)]
+    names = [f"{run.get('name')}:{run.get('conclusion')}" for run in relevant]
+    if not relevant:
+        return "unknown", names
+    if any((run.get("status") or "") != "completed" for run in relevant):
         return "pending", names
-    if any((run.get("conclusion") or "") != "success" for run in runs if isinstance(run, dict)):
+    if any((run.get("conclusion") or "") != "success" for run in relevant):
         return "failed", names
     return "verified", names
 

@@ -183,3 +183,21 @@ class ReleaseModeTests(unittest.TestCase):
         self.assertFalse(result["release_verified"])
         self.assertFalse(result["checks"]["assets"])
         self.assertEqual(result["checks"]["ci"], "unknown")
+
+    def test_release_workflows_do_not_count_against_ci_evidence(self):
+        payload = json.dumps({"check_runs": [
+            {"name": "Windows tests and mod builds", "status": "completed", "conclusion": "success"},
+            {"name": "Download and verify published assets", "status": "in_progress", "conclusion": None},
+            {"name": "Tagged release gate", "status": "queued", "conclusion": None},
+        ]})
+        with patch.object(core, "_repo_slug", return_value="o/r"),                 patch.object(core.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, payload, "")):
+            state, names = core._ci_state("abc123")
+        self.assertEqual(state, "verified")
+        self.assertEqual(names, ["Windows tests and mod builds:success"])
+
+    def test_a_required_check_failure_is_reported(self):
+        payload = json.dumps({"check_runs": [
+            {"name": "Windows tests and mod builds", "status": "completed", "conclusion": "failure"},
+        ]})
+        with patch.object(core, "_repo_slug", return_value="o/r"),                 patch.object(core.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, payload, "")):
+            self.assertEqual(core._ci_state("abc123")[0], "failed")
