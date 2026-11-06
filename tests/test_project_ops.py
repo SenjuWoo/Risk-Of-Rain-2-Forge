@@ -144,7 +144,7 @@ class BumpTests(unittest.TestCase):
         output = self.folder / "build/bin/Example.dll"
         output.parent.mkdir(parents=True)
         output.write_bytes(b"MZfixture")
-        core.write_json(self.folder / "build/receipt.json", {"assembly_sha256": core.sha256(output), "source_sha256": core.source_digest(self.folder)})
+        core.write_json(self.folder / "build/receipt.json", {"assembly_sha256": core.sha256(output), "source_sha256": core.source_digest(self.folder), "package_sha256": core.package_digest(self.folder)})
         old_package = core.package_mod("Example")
         old_bytes = Path(old_package["archive"]).read_bytes()
         project_ops.bump("Example", "patch")

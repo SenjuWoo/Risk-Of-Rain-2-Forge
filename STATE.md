@@ -1,6 +1,6 @@
 # Risk of Rain 2 Forge — verified handoff
 
-- Version: **1.13.0** (release preflight: `forge package` runs the audit and refuses on blocking findings; C# checks read through a comment/string stripper and understand `global using`, aliases, `using static` and qualified references; survivor warnings per file; `package_digest` tracks manifest/README/icon/content; version scan ignores `build/` backups; 11 regression tests). Older bullets below keep the version they were written under.
+- Version: **1.13.1** (provenance required — legacy receipts refused; audit reads comment-stripped source for version and audio checks; qualified `R2API.X` maps through known namespace/type tables instead of inventing modules; texture warning paired per texture; `forge release-check`; 120 tests).
 - Goal: give any agent current tools, exact API inspection, tested templates and an efficient modding playbook.
 - User preference: CLI by default. MCP is optional, unregistered globally and never auto-started. No personal agent config/model choices changed.
 - Entry: `forge.cmd doctor`, `forge.cmd guide`, `AGENTS.md`. Source modules in ror2forge/, templates in templates/, reusable skill in skills/ror2-forge/.

@@ -45,6 +45,8 @@ def parser() -> argparse.ArgumentParser:
                          help="Package even if the project audit reports blocking findings (recorded in the result)")
     validate = commands.add_parser("validate", help="Inspect a Thunderstore ZIP without extracting it")
     validate.add_argument("archive")
+    release = commands.add_parser("release-check", help="Compare VERSION, package version, changelog heading and HEAD tag")
+    release.add_argument("--json", action="store_true", help="Accepted for symmetry; output is always JSON")
     audit = commands.add_parser("audit", help="Cross-check R2API usage and BepInDependency GUIDs against the manifest")
     audit.add_argument("project")
     logs = commands.add_parser("logs", help="Read and triage a profile log (latest log by default)")
@@ -83,6 +85,8 @@ def main(argv=None) -> int:
             value = bump(args.name, args.target)
         elif args.command == "package":
             value = core.package_mod(args.name, skip_audit=args.skip_audit)
+        elif args.command == "release-check":
+            value = core.release_check()
         elif args.command == "audit":
             value = core.audit_project(args.project)
         elif args.command == "validate":

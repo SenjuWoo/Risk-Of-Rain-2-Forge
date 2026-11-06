@@ -141,6 +141,72 @@ class AuditRegressionTests(unittest.TestCase):
         result = core.audit_project(mod)
         self.assertTrue(result["valid"], result["errors"])
 
+    # --- v1.13.1 review: comments, root-namespace types, aliases, receipt provenance
+    def test_commented_version_constant_is_not_a_version(self):
+        mod = self._mod({"C.cs": '// const string FakeVersion = "9.9.9";' + chr(10) + "class P {}"})
+        self.assertTrue(core.audit_project(mod)["valid"], core.audit_project(mod)["errors"])
+
+    def test_commented_audio_event_is_not_played(self):
+        mod = self._mod({"A.cs": '// var sound = "Play_Deleted";' + chr(10) + 'class P { void A(){ Play("Play_Real"); } }'})
+        (mod / "package" / "assets").mkdir(parents=True, exist_ok=True)
+        (mod / "package" / "assets" / "events.txt").write_text("# key=files" + chr(10) + "Play_Real=1.wav" + chr(10), encoding="utf-8")
+        result = core.audit_project(mod)
+        self.assertTrue(result["valid"], result["errors"])
+
+    def test_root_namespace_type_is_not_a_module(self):
+        mod = self._mod({"R.cs": "class P { void A(){ R2API.RecalculateStatsAPI.GetStatCoefficients(c); } }"},
+                        ["RiskofThunder-R2API_RecalculateStats-1.1.4"])
+        result = core.audit_project(mod)
+        self.assertTrue(result["valid"], result["errors"])
+
+    def test_global_alias_qualifier_is_detected(self):
+        mod = self._mod({"G.cs": "using global::R2API.Skins;" + chr(10) + "class P {}"})
+        self.assertFalse(core.audit_project(mod)["valid"])
+
+    def test_unrelated_apply_in_one_file_does_not_mask_loadimage(self):
+        mod = self._mod({"T.cs": "class T { void L(){ a.LoadImage(bytes, false); b.Apply(false, true); } }"})
+        warnings = core.audit_project(mod)["warnings"]
+        self.assertTrue(any("LoadImage" in w for w in warnings), warnings)
+
+    def test_escaped_and_verbatim_strings_do_not_confuse_the_stripper(self):
+        source = ('class P { void A(){ var p = @"C:\\tmp//x"; var q = "he said \\"Play_Deleted\\""; '
+                  'using_files(); } }')
+        mod = self._mod({"S.cs": source})
+        (mod / "package" / "assets").mkdir(parents=True, exist_ok=True)
+        (mod / "package" / "assets" / "events.txt").write_text("# key=files" + chr(10), encoding="utf-8")
+        result = core.audit_project(mod)
+        self.assertTrue(result["valid"], result["errors"])
+
+    def test_legacy_receipt_cannot_bypass_freshness(self):
+        import shutil
+        shutil.copytree(REAL_ROOT / "templates", self.root / "templates")
+        shutil.copyfile(REAL_ROOT / "NuGet.Config", self.root / "NuGet.Config")
+        with patch.object(core, "ROOT", self.root):
+            core.new_mod("Legacy", "Team")
+            folder = core.project("Legacy")
+            dll = folder / "build/bin/Legacy.dll"
+            dll.parent.mkdir(parents=True, exist_ok=True)
+            dll.write_bytes(b"MZ" + b"fixture")
+            core.write_json(folder / "build/receipt.json", {
+                "assembly_sha256": core.sha256(dll),
+                "source_sha256": core.source_digest(folder),
+            })
+            manifest = core.read_json(folder / "manifest.json")
+            manifest["description"] = "changed after the build"
+            core.write_json(folder / "manifest.json", manifest)
+            with self.assertRaises(ValueError) as raised:
+                core.package_mod("Legacy")
+            self.assertIn("build again", str(raised.exception))
+
+    def test_release_check_reports_every_version_place(self):
+        result = core.release_check()
+        self.assertEqual(result["version"], result["package_version"])
+        self.assertEqual(result["changelog"], result["version"])
+        self.assertEqual(result["valid"], not result["errors"])
+        # A tag that points at another version must be reported, never silently accepted.
+        if result["tag"] and result["tag"] != result["version"]:
+            self.assertIn("tag", result["errors"][0])
+
 
 if __name__ == "__main__":
     unittest.main()
