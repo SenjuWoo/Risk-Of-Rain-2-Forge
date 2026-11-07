@@ -2,7 +2,7 @@
 
 Start here: `docs/AGENT_GUIDE.md`, `STATE.md`, `WORKSPACE_OWNERSHIP.md`.
 
-Start with `forge plan "<request>"`: it picks the route, returns the four documents that matter and the frameworks that actually apply, and lists what to avoid (`docs/TASKS.md`).
+Start with `forge plan "<request>"`: it picks the route, returns the documents that matter and the frameworks that actually apply, and lists what to avoid (`docs/TASKS.md`).
 
 The default interface is `forge.cmd` (Windows), or `python forge.py` with Python 3.11+. Commands emit JSON. Run `forge.cmd doctor`, then `forge.cmd guide`. Use `--help` for exact syntax. No MCP is required or started automatically. The optional stdio adapter is explicitly opt-in, belongs only to an RoR2 task, and must never be registered globally by default.
 

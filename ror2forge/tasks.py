@@ -153,7 +153,10 @@ CATEGORIES: dict[str, dict] = {
 
 DOC_ORDER = ["docs/CHARACTER_PIPELINE.md", "docs/RECIPES.md", "docs/RUNTIME.md", "docs/SURVIVOR_CHECKLIST.md",
              "docs/AUDIO.md", "docs/THUNDERSTORE.md"]
-MAX_DOCS = 4
+# Generic documents every route already reads; a category-specific second document (survivor's checklist) is
+# essential and must never be squeezed out by a budget.
+GENERIC_DOCS = {"docs/RECIPES.md", "docs/RUNTIME.md", "docs/THUNDERSTORE.md"}
+MAX_DOCS = 5
 
 
 def _normalise(text: str) -> str:
@@ -185,13 +188,16 @@ def plan(text: str) -> dict:
                 "checks": ["no category matched: read docs/RECIPES.md and decide the route before writing code"],
                 "avoid": ["importing frameworks before the route is chosen"], "matched": {}}
     chosen = [row["category"] for row in ranked[:3]]
-    excluded = [{"category": row["category"], "score": row["score"]} for row in ranked[3:]]
-    # Each chosen category's own document is primary: a recognised feature never loses its guidance to a cap.
+    excluded = [{"category": row["category"], "score": row["score"], "doc": CATEGORIES[row["category"]]["docs"][0],
+                 "action": "add an explicit need for it to the request, or read its document"}
+                for row in ranked[3:]]
+    # Each chosen category's own document is primary, and a category-specific second document is essential too:
+    # a recognised feature never loses its guidance to a reading budget.
     primary = []
     for name in chosen:
-        doc = CATEGORIES[name]["docs"][0]
-        if doc not in primary:
-            primary.append(doc)
+        for doc in CATEGORIES[name]["docs"][:2]:
+            if doc not in primary and doc not in GENERIC_DOCS:
+                primary.append(doc)
     additional, required, optional, checks, avoid = [], [], [], [], []
     for name in chosen:
         spec = CATEGORIES[name]
@@ -210,6 +216,9 @@ def plan(text: str) -> dict:
         for item in spec["avoid"]:
             if item not in avoid:
                 avoid.append(item)
+    for doc in [CATEGORIES[name]["docs"][0] for name in chosen]:
+        if doc in GENERIC_DOCS and doc not in additional and doc not in primary:
+            additional.append(doc)
     additional.sort(key=lambda doc: DOC_ORDER.index(doc) if doc in DOC_ORDER else len(DOC_ORDER))
     additional = additional[:max(0, MAX_DOCS - len(primary))]
     return {"request": text, "categories": chosen, "primary_docs": primary, "additional_docs": additional,
