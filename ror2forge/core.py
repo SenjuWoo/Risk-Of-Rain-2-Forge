@@ -804,10 +804,18 @@ def audit_project(root: str | Path) -> dict:
 
     # 6-9. survivor polish that compiles, validates and plays, so nothing else catches it (Ultron 1.1.2/1.2.0 audit)
     # Evaluated per file: a correct pattern in one file must not excuse a wrong one in another.
-    for text in texts.values():
+    findings = []
+    for path, text in texts.items():
         for warning in survivor_warnings(text):
             if warning not in warnings:
                 warnings.append(warning)
+        for finding in hot_path_findings(text, path.name):
+            findings.append(finding)
+            note = f"{path.name}:{finding['line']}: {finding['message']} - {finding['fix']}"
+            if note not in warnings:
+                warnings.append(note)
+    if len(findings) > 12:
+        warnings.append(f"{len(findings)} per-frame findings; only the first 12 are listed above")
 
     # 10. the compiled assembly is the authority: a reference the source scanner cannot see (extension methods
     # reached through a using static, a type alias, reflection-free API calls) still needs its Thunderstore package.
@@ -840,7 +848,7 @@ def audit_project(root: str | Path) -> dict:
             "r2api_modules": sorted(imports),
         "r2api_unresolved": sorted(unresolved), "dependency_guids": sorted(guids),
             "dependencies_declared": len(declared_full), "assembly": assembly,
-            "errors": errors, "warnings": warnings,
+            "findings": findings[:12], "errors": errors, "warnings": warnings,
             "valid": not errors}
 
 
@@ -988,6 +996,64 @@ def assembly_refs(dll: str | Path) -> dict:
 
 _ATTACK = re.compile(r"\bnew\s+(?:BulletAttack|BlastAttack|OverlapAttack)\b")
 _DAMAGE_TYPE = re.compile(r"\bdamageType\s*=\s*([^;,\n(]+(?:\([^)]*\))?)")
+
+
+_HOT_METHODS = re.compile(r"\b(?:override\s+|private\s+|public\s+|protected\s+|internal\s+)*void\s+"
+                         r"(Update|FixedUpdate|LateUpdate)\s*\(\s*\)")
+_HOT_LOOKUPS = (
+    (re.compile(r"\bFindObjectsOfType\b|\bFindObjectsByType\b"), "searches the whole scene each frame",
+     "cache the result once (or use an event), then reuse it"),
+    (re.compile(r"\bGameObject\s*\.\s*Find\b|\bGameObject\s*\.\s*FindWithTag\b"),
+     "name-based lookup each frame", "resolve the object at Awake and keep the reference"),
+    (re.compile(r"\bResources\s*\.\s*Load\b"), "synchronous asset load each frame",
+     "load once during initialisation; unload explicitly when done"),
+    (re.compile(r"\bGetComponent(?:InChildren|InParent)?\s*<"), "component lookup each frame",
+     "cache the component in a field"),
+)
+_HOT_LINQ = re.compile(r"\.(?:Where|Select|SelectMany|OrderBy|ToList|ToArray|Any|First|FirstOrDefault)\s*\(")
+
+
+def _method_bodies(text: str):
+    """(name, start, end) for Update/FixedUpdate/LateUpdate bodies, by brace counting on comment-stripped code."""
+    for match in _HOT_METHODS.finditer(text):
+        start = text.find("{", match.end())
+        if start < 0:
+            continue
+        depth, index = 0, start
+        while index < len(text):
+            if text[index] == "{":
+                depth += 1
+            elif text[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    yield match.group(1), start + 1, index
+                    break
+            index += 1
+
+
+def hot_path_findings(text: str, name: str = "") -> list[dict]:
+    """Advisory findings for work done every frame. Warnings, never errors: a real Update loop is often correct."""
+    findings, seen = [], set()
+    for method, start, end in _method_bodies(text):
+        body = text[start:end]
+        for pattern, problem, fix in _HOT_LOOKUPS:
+            for hit in pattern.finditer(body):
+                line = text.count(chr(10), 0, start + hit.start()) + 1
+                key = (method, line, problem)
+                if key in seen:
+                    continue
+                seen.add(key)
+                findings.append({"file": name, "line": line, "method": method, "severity": "warning",
+                                 "confidence": "high" if "GetComponent" not in problem else "medium",
+                                 "message": f"{problem} - {hit.group(0).strip()} in {method}()",
+                                 "fix": fix, "doc": "docs/TASKS.md"})
+        linq = _HOT_LINQ.search(body)
+        if linq:
+            line = text.count(chr(10), 0, start + linq.start()) + 1
+            findings.append({"file": name, "line": line, "method": method, "severity": "warning",
+                             "confidence": "medium", "message": f"LINQ in {method}() allocates every frame",
+                             "fix": "hand-written loop, or precompute once", "doc": "docs/TASKS.md"})
+    return findings
 
 
 def survivor_warnings(source: str) -> list[str]:
