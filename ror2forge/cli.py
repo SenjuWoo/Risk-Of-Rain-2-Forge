@@ -53,6 +53,8 @@ def parser() -> argparse.ArgumentParser:
     release.add_argument("--assets", help="Folder holding SHA256SUMS and BUILD-RECEIPT.json to verify")
     audit = commands.add_parser("audit", help="Cross-check R2API usage and BepInDependency GUIDs against the manifest")
     audit.add_argument("project")
+    audit.add_argument("--findings-limit", type=int, default=12,
+                       help="How many per-frame findings to return (default 12; the total is always reported)")
     logs = commands.add_parser("logs", help="Read and triage a profile log (latest log by default)")
     logs.add_argument("--path")
     logs.add_argument("--lines", type=int, default=250)
@@ -95,7 +97,7 @@ def main(argv=None) -> int:
         elif args.command == "release-check":
             value = core.release_check(args.mode, args.assets)
         elif args.command == "audit":
-            value = core.audit_project(args.project)
+            value = core.audit_project(args.project, args.findings_limit)
         elif args.command == "validate":
             value = core.validate(args.archive)
         elif args.command == "logs":

@@ -176,19 +176,28 @@ def classify(text: str) -> list[dict]:
 
 
 def plan(text: str) -> dict:
-    """The smallest useful briefing for this request."""
+    """The smallest useful briefing for this request: every recognised feature keeps its own document."""
     ranked = classify(text)
     if not ranked:
-        return {"request": text, "categories": [], "docs": ["docs/RECIPES.md"], "required": [], "optional": [],
+        return {"request": text, "categories": [], "primary_docs": ["docs/RECIPES.md"],
+                "additional_docs": [], "docs": ["docs/RECIPES.md"], "excluded": [],
+                "required": [], "optional": [],
                 "checks": ["no category matched: read docs/RECIPES.md and decide the route before writing code"],
                 "avoid": ["importing frameworks before the route is chosen"], "matched": {}}
     chosen = [row["category"] for row in ranked[:3]]
-    docs, required, optional, checks, avoid = [], [], [], [], []
+    excluded = [{"category": row["category"], "score": row["score"]} for row in ranked[3:]]
+    # Each chosen category's own document is primary: a recognised feature never loses its guidance to a cap.
+    primary = []
+    for name in chosen:
+        doc = CATEGORIES[name]["docs"][0]
+        if doc not in primary:
+            primary.append(doc)
+    additional, required, optional, checks, avoid = [], [], [], [], []
     for name in chosen:
         spec = CATEGORIES[name]
-        for doc in spec["docs"]:
-            if doc not in docs:
-                docs.append(doc)
+        for doc in spec["docs"][1:]:
+            if doc not in primary and doc not in additional:
+                additional.append(doc)
         for dep in spec["required"]:
             if dep not in required:
                 required.append(dep)
@@ -201,7 +210,9 @@ def plan(text: str) -> dict:
         for item in spec["avoid"]:
             if item not in avoid:
                 avoid.append(item)
-    docs.sort(key=lambda doc: DOC_ORDER.index(doc) if doc in DOC_ORDER else len(DOC_ORDER))
-    return {"request": text, "categories": chosen, "docs": docs[:MAX_DOCS], "required": required,
-            "optional": optional, "checks": checks, "avoid": avoid,
-            "matched": {row["category"]: row["matched"] for row in ranked[:3]}}
+    additional.sort(key=lambda doc: DOC_ORDER.index(doc) if doc in DOC_ORDER else len(DOC_ORDER))
+    additional = additional[:max(0, MAX_DOCS - len(primary))]
+    return {"request": text, "categories": chosen, "primary_docs": primary, "additional_docs": additional,
+            "docs": primary + additional, "excluded": excluded, "required": required, "optional": optional,
+            "checks": checks, "avoid": avoid,
+            "matched": {row["category"]: row["matched"] for row in ranked}}
