@@ -6,7 +6,7 @@ Tell the forge what you are building before you read anything:
 forge plan "create a new playable survivor with 20 skins and a flying companion"
 ```
 
-It returns the categories it recognised, the **four most relevant documents** (never the whole docs tree), the
+It returns the categories it recognised, the **documents that matter** (never the whole docs tree), the
 frameworks that actually apply, the checks that must pass, and the tempting wrong turns to avoid. The classifier is
 data in `ror2forge/tasks.py`; add a category there rather than in prose.
 
@@ -28,7 +28,8 @@ data in `ror2forge/tasks.py`; add a category there rather than in prose.
 | `ui` | menu, HUD | RUNTIME, RECIPES | RiskOfOptions (optional) |
 | `networking` | host/client, late join | RECIPES, RUNTIME | Networking |
 
-A request can match several. The top three are merged, documents are capped at four, and required packages are
+A request can match several. The top three are merged, every chosen category's own document is kept (the survivor
+route also keeps `SURVIVOR_CHECKLIST.md`), generic reading fills up to five documents, and required packages are
 unioned — so "survivor with skins and a network sync" does not silently pull in every framework in the registry.
 
 ## Per-frame work: what the audit warns about
@@ -65,12 +66,17 @@ will not pretend one exists.
 |---|---|---|
 | Frame time | `Time.unscaledDeltaTime` sampled every frame into a fixed ring buffer; log median and 99th percentile once a second | sampling itself costs a little; the log line, not the sample, is what distorts |
 | CPU time of one method | `System.Diagnostics.Stopwatch` around the call, log total and worst case | only the code you wrapped |
-| GC pressure | `GC.CollectionCount(0)` and `GC.GetTotalMemory(false)` once a second | allocation volume, not which code allocated |
+| GC pressure | `GC.CollectionCount(0)` once a second (how often gen-0 collections run) and `GC.GetTotalMemory(false)` (approximate current managed heap size) | collection frequency and heap size, not how many bytes you allocated |
 | Load time | BepInEx timestamps in `BepInEx/LogOutput.log` between two of your own log lines | includes everything else loading at that moment |
-| Live inspection | RuntimeUnityEditor, or BepInEx's debugger (`debug_enabled=true` in `BepInEx/config/BepInEx.cfg`, per the R2Wiki debugging page) | interactive tools, not evidence, and never a shipped dependency |
+| Live inspection | RuntimeUnityEditor, or the Mono debugger (`debug_enabled=true` in the profile's `doorstop_config.ini`, per the R2Wiki debugging page) | interactive tools, not evidence, and never a shipped dependency |
 
 Log through BepInEx (`Logger.LogInfo`), never `Debug.Log` per frame, and gate the instrumentation behind a config entry
 that defaults to off.
+
+**Allocation volume is not measurable from a shipped mod.** The Mono runtime RoR2 uses has no public equivalent of
+`GC.GetTotalAllocatedBytes`/`GC.GetAllocatedBytesForCurrentThread` (those are CoreCLR APIs). Treat allocation volume as
+**UNMEASURED** unless you can attach a real profiler, and use collection counts plus heap size as the proxy: more gen-0
+collections per second under the same workload means more garbage.
 
 **A comparison you can trust:** same machine, same game version, same graphics settings, same mod list, same stage, the
 same elapsed stage time, the same entity count. Record the number, change one thing, record it again. Report the delta —

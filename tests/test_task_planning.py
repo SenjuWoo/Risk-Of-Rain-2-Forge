@@ -54,13 +54,27 @@ class PlanTests(unittest.TestCase):
         plan = tasks.plan("Create a survivor with complex multiplayer projectile effects, 12 skins, animations "
                           "and audio")
         for category in plan["categories"]:
-            self.assertIn(tasks.CATEGORIES[category]["docs"][0], plan["primary_docs"], category)
+            self.assertIn(tasks.CATEGORIES[category]["docs"][0], plan["docs"], category)
 
     def test_projectile_heavy_multiplayer_request(self):
         plan = tasks.plan("A projectile-heavy weapon for multiplayer with synced effects")
         self.assertIn("projectile", plan["categories"])
         self.assertIn("networking", plan["categories"])
         self.assertTrue(any("server" in check or "authority" in check for check in plan["checks"]))
+
+    def test_survivor_audio_and_multiplayer_keep_all_three(self):
+        plan = tasks.plan("Create a survivor with complex multiplayer projectile effects, 12 skins, animations "
+                          "and audio")
+        self.assertIn("docs/SURVIVOR_CHECKLIST.md", plan["primary_docs"])
+        self.assertIn("docs/AUDIO.md", plan["primary_docs"])
+        self.assertTrue(any("host and client" in check for check in plan["checks"]), plan["checks"])
+
+    def test_excluded_categories_say_what_to_do(self):
+        plan = tasks.plan("survivor with skins, custom attacks, a companion, projectiles, audio and multiplayer")
+        self.assertTrue(plan["excluded"])
+        for row in plan["excluded"]:
+            self.assertTrue(row["doc"].startswith("docs/"), row)
+            self.assertTrue(row["action"], row)
 
     def test_crowded_request_reports_what_it_excluded(self):
         plan = tasks.plan("survivor with skins, custom attacks, a companion, projectiles, stage hazard, vfx, "
