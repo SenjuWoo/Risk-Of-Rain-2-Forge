@@ -684,7 +684,7 @@ def _strip_csharp(text: str, keep_strings: bool = False) -> str:
 
 
 
-def audit_project(root: str | Path) -> dict:
+def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
     """Cross-check C# R2API usage and BepInDependency GUIDs against the package manifest."""
     root = Path(root).resolve()
     if not root.is_dir():
@@ -811,11 +811,13 @@ def audit_project(root: str | Path) -> dict:
                 warnings.append(warning)
         for finding in hot_path_findings(text, path.name):
             findings.append(finding)
-            note = f"{path.name}:{finding['line']}: {finding['message']} - {finding['fix']}"
-            if note not in warnings:
-                warnings.append(note)
-    if len(findings) > 12:
-        warnings.append(f"{len(findings)} per-frame findings; only the first 12 are listed above")
+            if len(findings) <= findings_limit:
+                note = f"{path.name}:{finding['line']}: {finding['message']} - {finding['fix']}"
+                if note not in warnings:
+                    warnings.append(note)
+    if len(findings) > findings_limit:
+        warnings.append(f"{len(findings)} per-frame findings; the first {findings_limit} are in findings[] "
+                        f"- rerun with --findings-limit {len(findings)} for all of them")
 
     # 10. the compiled assembly is the authority: a reference the source scanner cannot see (extension methods
     # reached through a using static, a type alias, reflection-free API calls) still needs its Thunderstore package.
@@ -848,7 +850,8 @@ def audit_project(root: str | Path) -> dict:
             "r2api_modules": sorted(imports),
         "r2api_unresolved": sorted(unresolved), "dependency_guids": sorted(guids),
             "dependencies_declared": len(declared_full), "assembly": assembly,
-            "findings": findings[:12], "errors": errors, "warnings": warnings,
+            "findings": findings[:findings_limit], "findings_total": len(findings),
+            "findings_truncated": len(findings) > findings_limit, "errors": errors, "warnings": warnings,
             "valid": not errors}
 
 

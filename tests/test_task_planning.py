@@ -43,10 +43,68 @@ class PlanTests(unittest.TestCase):
         for doc in plan["docs"]:
             self.assertTrue((ROOT / doc).is_file(), doc)
 
+    def test_audio_survives_a_crowded_request(self):
+        plan = tasks.plan("Create a survivor with complex multiplayer projectile effects, 12 skins, animations "
+                          "and audio")
+        self.assertIn("audio", plan["categories"])
+        self.assertIn("docs/AUDIO.md", plan["primary_docs"])
+        self.assertIn("docs/AUDIO.md", plan["docs"])
+
+    def test_every_chosen_category_keeps_its_own_document(self):
+        plan = tasks.plan("Create a survivor with complex multiplayer projectile effects, 12 skins, animations "
+                          "and audio")
+        for category in plan["categories"]:
+            self.assertIn(tasks.CATEGORIES[category]["docs"][0], plan["primary_docs"], category)
+
+    def test_projectile_heavy_multiplayer_request(self):
+        plan = tasks.plan("A projectile-heavy weapon for multiplayer with synced effects")
+        self.assertIn("projectile", plan["categories"])
+        self.assertIn("networking", plan["categories"])
+        self.assertTrue(any("server" in check or "authority" in check for check in plan["checks"]))
+
+    def test_crowded_request_reports_what_it_excluded(self):
+        plan = tasks.plan("survivor with skins, custom attacks, a companion, projectiles, stage hazard, vfx, "
+                          "audio and multiplayer sync")
+        self.assertEqual(len(plan["categories"]), 3)
+        self.assertTrue(plan["excluded"], plan)
+        self.assertTrue(all("category" in row for row in plan["excluded"]))
+        self.assertLessEqual(len(plan["docs"]), tasks.MAX_DOCS)
+
     def test_unmatched_request_is_honest(self):
         plan = tasks.plan("do something interesting")
         self.assertEqual(plan["categories"], [])
         self.assertIn("docs/RECIPES.md", plan["docs"])
+
+
+class FindingBudgetTests(unittest.TestCase):
+    def audit(self, limit):
+        with tempfile.TemporaryDirectory(dir=ROOT / "artifacts") as scratch:
+            root = pathlib.Path(scratch)
+            (root / "manifest.json").write_text(
+                '{"name":"Many","version_number":"1.0.0","website_url":"","description":"d","dependencies":[]}',
+                encoding="utf-8")
+            (root / "src").mkdir()
+            lines = ["class P {", "  void Update() {"]
+            lines += ["    var o%d = FindObjectsOfType<Enemy>();" % i for i in range(15)]
+            lines += ["  }", "}"]
+            (root / "src/P.cs").write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return core.audit_project(root, findings_limit=limit)
+
+    def test_total_is_exact_and_truncation_is_explicit(self):
+        result = self.audit(12)
+        self.assertEqual(result["findings_total"], 15)
+        self.assertTrue(result["findings_truncated"])
+        self.assertEqual(len(result["findings"]), 12)
+        self.assertEqual(len(result["warnings"]), 13, result["warnings"])
+        self.assertTrue(result["warnings"][-1].startswith("15 per-frame findings"))
+        self.assertIn("--findings-limit 15", result["warnings"][-1])
+
+    def test_limit_can_be_raised_without_changing_the_count(self):
+        result = self.audit(20)
+        self.assertEqual(result["findings_total"], 15)
+        self.assertFalse(result["findings_truncated"])
+        self.assertEqual(len(result["findings"]), 15)
+        self.assertFalse(any("per-frame findings" in warning for warning in result["warnings"]))
 
 
 class HotPathTests(unittest.TestCase):

@@ -1,6 +1,6 @@
 # Risk of Rain 2 Forge — verified handoff
 
-- Version: **1.15.0** — task-aware routing (`forge plan`), per-frame audit findings, compiled-assembly dependency audit, verified releases. 208 tests (3 skipped locally).
+- Version: **1.15.1** — `forge plan` (primary/additional docs, excluded categories), per-frame audit findings with exact totals, compiled-assembly dependency audit, verified releases. 214 tests (3 skipped locally).
 - Goal: give any agent current tools, exact API inspection, tested templates and an efficient modding playbook.
 - User preference: CLI by default. MCP is optional, unregistered globally and never auto-started. No personal agent config/model choices changed.
 - Entry: `forge.cmd doctor`, `forge.cmd guide`, `AGENTS.md`. Source modules in ror2forge/, templates in templates/, reusable skill in skills/ror2-forge/.

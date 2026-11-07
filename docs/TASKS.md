@@ -44,19 +44,38 @@ unioned — so "survivor with skins and a network sync" does not silently pull i
 | LINQ (`Where`, `Select`, `ToList`, `Any`, …) | allocates every call (medium confidence) | hand-written loop or precomputed list |
 
 Comments and string literals never trip these — the scanner reads comment-stripped code, and every finding carries
-file, line, method, severity and confidence in `forge audit` JSON (`findings[]`).
+file, line, method, severity and confidence in `forge audit` JSON (`findings[]`), and the audit always reports
+`findings_total`; the default view shows 12, `--findings-limit N` raises it, and `findings_truncated` says whether
+anything was held back.
 
 `FixedUpdate` physics is not flagged. A single allocation is not flagged. If a rule fires on legitimate code, that is
 a bug in the rule, not in the mod.
 
 ## Measuring instead of guessing
 
-Optimisation claims need numbers from the same machine, game version, graphics settings, mod profile and workload:
+**What the base game gives you.** The developer console opens with `Ctrl+Alt+~` (US/UK layout) and is then toggled with
+`~`; `help` lists every command, `find <text>` searches them. Those commands handle game state, not profiling:
+`fps_max` caps the frame rate, it does not report frame time. Mods can add their own commands (DebugToolkit adds a
+console and many debug commands; it is not a profiler). The base game ships no `profiler.*` command, and this forge
+will not pretend one exists.
 
-1. Baseline run with only the mod that ships the feature and nothing else new.
-2. F7 console: `profiler.enable` / `profiler.log` on the frame range that matters (RoR2 ships a profiler stub).
-3. Record median and 99th-percentile frame time, `GC.Alloc` per frame, and peak managed heap (`profiler.memory`).
-4. Repeat after the change, same map, same stage time, same entity count.
-5. Report the delta or report **UNMEASURED**. A green audit is not a measurement.
+**What to use instead.** Measure from inside your own mod, behind a debug switch that is off in a release:
 
-Do not add a permanent profiler dependency, and do not ship debug instrumentation enabled in a release build.
+| Want | How | Honest limits |
+|---|---|---|
+| Frame time | `Time.unscaledDeltaTime` sampled every frame into a fixed ring buffer; log median and 99th percentile once a second | sampling itself costs a little; the log line, not the sample, is what distorts |
+| CPU time of one method | `System.Diagnostics.Stopwatch` around the call, log total and worst case | only the code you wrapped |
+| GC pressure | `GC.CollectionCount(0)` and `GC.GetTotalMemory(false)` once a second | allocation volume, not which code allocated |
+| Load time | BepInEx timestamps in `BepInEx/LogOutput.log` between two of your own log lines | includes everything else loading at that moment |
+| Live inspection | RuntimeUnityEditor, or BepInEx's debugger (`debug_enabled=true` in `BepInEx/config/BepInEx.cfg`, per the R2Wiki debugging page) | interactive tools, not evidence, and never a shipped dependency |
+
+Log through BepInEx (`Logger.LogInfo`), never `Debug.Log` per frame, and gate the instrumentation behind a config entry
+that defaults to off.
+
+**A comparison you can trust:** same machine, same game version, same graphics settings, same mod list, same stage, the
+same elapsed stage time, the same entity count. Record the number, change one thing, record it again. Report the delta —
+or report **UNMEASURED**. A green audit is not a measurement, a single run is not a trend, and no profiler output is
+quoted here because none was taken.
+
+**Do not** add a profiler dependency to the Forge or to a mod's release build, and do not install debugging tools into a
+mod-manager profile on someone's behalf.
