@@ -15,6 +15,8 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description="Agent-first Risk of Rain 2 Forge; JSON output, local source only.")
     result.add_argument("--debug", action="store_true", help="Include a diagnostic traceback on stderr")
     commands = result.add_subparsers(dest="command", required=True)
+    plan = commands.add_parser("plan", help="Classify a mod request and list only the guidance it needs")
+    plan.add_argument("request", nargs="+", help="Plain-language description of the mod to build")
     commands.add_parser("doctor", help="Discover game, profiles and installed tools without changing them")
     commands.add_parser("updates", help="Check official package feeds on demand without changing pins or installing updates")
     setup = commands.add_parser("setup", help="Install pinned tools locally, reusing existing Python/.NET")
@@ -66,7 +68,10 @@ def parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     try:
-        if args.command == "setup":
+        if args.command == "plan":
+            from .tasks import plan
+            value = plan(" ".join(args.request))
+        elif args.command == "setup":
             from .toolchain import setup
             value = setup(offline=args.offline)
         elif args.command == "doctor":
