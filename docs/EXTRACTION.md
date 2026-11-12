@@ -13,6 +13,7 @@ Everything here is measured, not recalled. Numbers were read from the files on t
 | Animations | Yes | Same trap, and it is the one that breaks rigs |
 | Textures | Yes | Usually DDS/PNG; RoR2 runs the Built-In pipeline |
 | Wwise sound **media** | Yes | WEM/WAV decode fine |
+| Unity **AudioClip** | Yes | UnityPy + its FMOD wrapper; load the `.resource` files too (Unity section) |
 | Wwise **bank** | **No**, across Wwise versions | See "Audio" — this is measured, not folklore |
 | Materials/shaders | No | Different engine, different shading model |
 
@@ -77,9 +78,9 @@ That leaves three honest routes:
 
 1. **Re-author in Wwise 2023.1.** Decode the source media to WAV, import it, build a bank, load with
    R2API.Sound. Correct and spatialised; needs the Wwise authoring tool (account-gated, see `docs/AUDIO.md`).
-2. **Play the decoded media through the OS mixer.** No bank, no version matching, no licence — this is what
-   both shipped characters do (Gnar and Ultron). Costs spatialisation and the game's mixer. Documented in
-   `docs/AUDIO.md`.
+2. **Play the decoded media through the OS mixer.** No bank, no version matching, no Wwise account. All four
+   survivors built with this kit do this (Gnar, Ultron, Kisame, Manaka). You lose the engine's spatialisation and mixer and rebuild
+   volume, distance falloff, pan and pause yourself. Documented in `docs/AUDIO.md`.
 3. **Check whether the source happens to match.** If a game ships 2023.1 banks (version 150), its banks are
    plausibly loadable as-is. Measure first; never assume.
 
@@ -141,3 +142,17 @@ character and looked "nothing like the game" until the prefab was checked.
 
 A baker that falls back silently when its input is missing produces a "working" pack with 127 of 176 clips and zero face
 shapes. Fail loudly if the clip export or bundle is absent, and print counts (parts, clips, shapes referenced).
+
+### Unity AudioClips
+
+- UnityPy decodes `AudioClip.samples` to WAV through `fmod_toolkit`, which recent UnityPy installs as a dependency;
+  no separate FMOD download.
+- Streamed clip data sits in the loose `*.resource` files beside `data.unity3d` (`resources.resource`,
+  `sharedassetsN.resource`). Load them in the same environment: `UnityPy.load(data_unity3d, *resource_files)`.
+  Loaded alone, UnityPy hands FMOD the wrong bytes and it raises `FmodError: FORMAT`.
+- Asset names can be stored mis-decoded (UTF-8 read as Shift-JIS, e.g. `雜ｳ髻ｳ繝ｻ…` for `足音・…`). Match on the stored
+  name, and do not expect a clean Japanese name on disk.
+- List every clip with length, channels and rate before planning cues. A game can have no voice acting at all
+  (Manaka: 167 clips, all Foley and BGM); the cue plan then comes from its Foley.
+- Normalise per take (source levels varied from 0.03 to 1.0 peak), trim to the skill's length with a short fade, and
+  resample offline to the mixer's format. Keep the decoded originals out of the package.

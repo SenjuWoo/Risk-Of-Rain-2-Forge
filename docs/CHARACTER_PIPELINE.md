@@ -122,7 +122,7 @@ Blend by interpolating between keyframes with a short crossfade between clips; t
 Each of these was measured on the baseline above, not inferred.
 
 - **Unity's audio subsystem is disabled in this build.** `AudioSettings.outputSampleRate` is `0`, `AudioSettings.dspTime` is `0`, and the engine logs `Audio system is disabled, so AudioSettings.outputSampleRate cannot be queried`. `AudioSettings.Reset(...)` returns without error and changes nothing. `AudioClip.Create(...)` yields `samples=0, channels=0`, `SetData` fails and `AudioSource.isPlaying` stays false.
-- **The game is Wwise 2023.1 only** (from `AkSoundEngine.dll`'s build paths). Spatial sound still needs a `.bnk` authored in 2023.1. A WAV can be audible without that bank: `docs/AUDIO.md` Route B writes PCM to the Windows mixer. A second character shipped that route and a player accepted the voice. `AudioSource` itself still cannot play the clip.
+- **The game is Wwise 2023.1 only** (from `AkSoundEngine.dll`'s build paths). Spatial sound still needs a `.bnk` authored in 2023.1. A WAV can be audible without that bank: `docs/AUDIO.md` Route B writes PCM to the Windows mixer. Four survivors built with this kit use that route (Gnar, Ultron, Kisame, Manaka). `AudioSource` itself still cannot play the clip.
 - **`CharacterModel` owns renderer visibility.** It sets `renderer.enabled` from its fade/visibility factors. A runtime-built renderer that is not in `baseRendererInfos` will be toggled off even though the mesh exists.
 - **Skin application replaces `baseRendererInfos`** with the skin's (often empty) template list. Re-apply your renderer infos after `ApplySkinAsync`, or the model disappears on skin change.
 - **`ViewableTag.Refresh` / `RuleChoiceController` NullReferenceExceptions on quit are vanilla teardown noise** with custom content in the pregame UI. They appear at `Application.Quit`, do not affect gameplay, and are not caused by the mod.
@@ -164,6 +164,8 @@ Each of these was measured on the baseline above, not inferred.
 | Skin or costume shows an overlay decal (womb crest, censor bars) | A submesh that is a runtime overlay is drawn | Record hidden submesh indices in the manifest and skip them (and skip their textures when packaging) |
 | Effect spawns and nothing draws | `Shader.Find("Sprites/Default")` and other built-ins are stripped (`No GUID record is available for shader name`) | Load an RoR2 shader through Addressables (`RoR2/Base/Shaders/HGCloudRemap.shader`, `DISABLEREMAP`), instantiate an inactive template and `SetActive(true)` the copy. `docs/RUNTIME.md` |
 | Item displays do nothing although the rule set is shared | The adapter builder was written but never called, or its bone names matched duplicate-named accessory rigs | Call it once after the rig is built; map Commando anchors through the manifest's humanoid names, not raw transform names |
+| A skill's timed buff works for the host and never for other players | `AddTimedBuff` sits behind `isAuthority`; for a client-owned body that is the client, and buffs are server-only | Grant it where `NetworkServer.active` (the server runs its own copy of the state), once per cast. `docs/RUNTIME.md` |
+| Items keyed to one skill slot react to the wrong skill's projectiles | Two skills share a projectile prefab whose `ProjectileDamage.damageType` carries one `DamageSource` | Fire with `FireProjectileInfo.damageTypeOverride` and the caller's `DamageSource` per shot |
 | Config value from an older build breaks the new look | The setting changed meaning (a 260 extrapolation became a 0-85 range) | New key name for a new meaning; clamp in code regardless of what the file holds |
 
 ## Verification loop
@@ -192,7 +194,7 @@ What generalizes across characters, in the order it saves time:
 
 ## Audio
 
-Treat spatial audio as a separate project with its own dependency (Wwise authoring in the game's version). Decode and map the source clips while you have the archives open. Do not ship a runtime `AudioSource` path. It cannot work, and it fails silently with a log line per cast. Voice that does not need position can use the OS mixer in `docs/AUDIO.md`. The played second character did.
+Decode and map the source clips while you have the archives open. Do not ship a runtime `AudioSource` path. It cannot work, and it fails silently with a log line per cast. Without a Wwise 2023.1 install, use the OS mixer in `docs/AUDIO.md` (Route B): all four survivors built with this kit do. The mod computes the game's volume sliders, distance falloff, pause (Gnar, Manaka) and left/right pan (Manaka) itself. Engine spatialisation (occlusion, reverb, the game's mixer) still needs an authored bank.
 
 Companion aim, the detached model, camera struct copies, timed buffs and what counts as a passing run are in `docs/RUNTIME.md` (`forge guide runtime`).
 
