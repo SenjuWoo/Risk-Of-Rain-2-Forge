@@ -56,6 +56,8 @@ Beam and ring visuals that should track the crosshair belong in `Update`. Damage
 
 Healing and barrier run only when `NetworkServer.active`. The pulse and the sound run on every client. A client-side heal desyncs the body.
 
+The same goes for a skill's own timed buff. `if (isAuthority) characterBody.AddTimedBuff(...)` works when the host plays the survivor and silently does nothing for every other player: for a client-owned body the authority is the client, and `AddTimedBuff` is ignored off the server. Grant it from the server's copy of the state (`if (!granted && NetworkServer.active && fixedAge >= t)`), and keep flashes and sounds outside any authority check so every client shows them. Manaka 1.3.0 had both bugs (Golden Rain, Toy Overload); fixed in 1.4.0.
+
 ## Authority for motor writes
 
 A body controller that sets `CharacterMotor.velocity` or calls `Motor.ForceUnground()` (flight, hover, dash) must gate it on `body.hasEffectiveAuthority`. Only the owning client simulates that motor; on the host and other clients the writes are discarded at best and fight the network transform at worst. Entity states run on every client, so buffs still go on the server (`NetworkServer.active`) and visuals still run everywhere.
