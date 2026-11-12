@@ -1,6 +1,6 @@
 # Risk of Rain 2 Forge — verified handoff
 
-- Version: **1.15.3** — audit layout fixes (flat `assets/audio/events.txt`, qualified `R2API.Utils`, SFX volume read project-wide by convar name, once-guarded lookups) found on Gnar 1.3.3; `forge plan` (essential docs, actionable exclusions), per-frame audit findings with exact totals, compiled-assembly dependency audit, verified releases. 216 tests (3 skipped locally).
+- Version: **1.15.4** — audit layout fixes (flat `assets/audio/events.txt`, qualified `R2API.Utils`, SFX volume read project-wide by convar name, once-guarded lookups) found on Gnar 1.3.3; `forge plan` (essential docs, actionable exclusions), per-frame audit findings with exact totals, compiled-assembly dependency audit, verified releases. 216 tests (3 skipped locally).
 - Goal: give any agent current tools, exact API inspection, tested templates and an efficient modding playbook.
 - User preference: CLI by default. MCP is optional, unregistered globally and never auto-started. No personal agent config/model choices changed.
 - Entry: `forge.cmd doctor`, `forge.cmd guide`, `AGENTS.md`. Source modules in ror2forge/, templates in templates/, reusable skill in skills/ror2-forge/.
