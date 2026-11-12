@@ -144,3 +144,69 @@ class AudioMapTests(Fixture):
                        events="Play_Custom=absent.wav\n")
         errors = core.audit_project(mod)["errors"]
         self.assertTrue(any("absent.wav" in e for e in errors), errors)
+
+
+class GnarLayoutRegressionTests(Fixture):
+    """Gnar 1.3.3 false positives: no content/ folder, qualified R2API.Utils, split audio files, one-shot lookups."""
+
+    def _flat_audio_mod(self, source, events="Play_Real=clip.wav\n", clip=True):
+        mod = self.mod({"A.cs": source}, ["RiskofThunder-R2API_Core-5.3.0"])
+        audio = mod / "assets" / "audio"
+        audio.mkdir(parents=True)
+        (audio / "events.txt").write_text(events, encoding="utf-8")
+        if clip:
+            (audio / "clip.wav").write_bytes(b"RIFF")
+        return mod
+
+    def test_event_map_without_a_content_folder_ships_and_is_checked(self):
+        mod = self._flat_audio_mod('class P { void M(){ Play("Play_Real"); } }')
+        result = core.audit_project(mod)
+        self.assertFalse(any("outside content/" in e for e in result["errors"]), result["errors"])
+        self.assertEqual(result["errors"], [])
+
+    def test_event_map_without_a_content_folder_still_checks_keys_and_files(self):
+        mod = self._flat_audio_mod('class P { void M(){ Play("Play_Missing"); } }', clip=False)
+        errors = core.audit_project(mod)["errors"]
+        self.assertTrue(any("Play_Missing" in e for e in errors), errors)
+        self.assertTrue(any("clip.wav" in e for e in errors), errors)
+
+    def test_map_outside_content_is_still_an_error_when_content_exists(self):
+        mod = self.mod({"A.cs": 'class P {}'}, events="Play_Real=clip.wav\n")
+        (mod / "docs").mkdir()
+        (mod / "docs" / "events.txt").write_text("Play_Other=clip.wav\n", encoding="utf-8")
+        self.assertEqual(core.audit_project(mod)["errors"], [])      # the content/ map ships; docs/ is not a map
+        for stale in (mod / "content").rglob("events.txt"):
+            stale.unlink()
+        self.assertTrue(any("outside content/" in e for e in core.audit_project(mod)["errors"]))
+
+    def test_fully_qualified_utils_attribute_is_a_core_reference(self):
+        source = "[R2API.Utils.NetworkCompatibility(R2API.Utils.CompatibilityLevel.EveryoneMustHaveMod)]\nclass P {}"
+        mod = self.mod({"A.cs": source}, ["RiskofThunder-R2API_Core-5.3.0"])
+        result = core.audit_project(mod)
+        self.assertEqual(result["r2api_unresolved"], [])
+        self.assertTrue(result["valid"], result["errors"])
+        bare = self.mod({"A.cs": source}, [])
+        self.assertTrue(any("R2API_Utils" in e or "Core" in e for e in core.audit_project(bare)["errors"]))
+
+    def test_sfx_volume_read_by_convar_name_in_another_file_counts(self):
+        mod = self.mod({"OsAudio.cs": "class O { void P(){ waveOutWrite(h, p, 32); } }",
+                        "GnarAudio.cs": 'class G { float V(){ return Read(console, "volume_sfx"); } }'})
+        self.assertFalse(any("SFX volume" in w for w in core.audit_project(mod)["warnings"]))
+
+    def test_waveout_with_no_volume_read_anywhere_still_warns(self):
+        mod = self.mod({"OsAudio.cs": "class O { void P(){ waveOutWrite(h, p, 32); } }"})
+        self.assertTrue(any("SFX volume" in w for w in core.audit_project(mod)["warnings"]))
+
+    def test_lookup_inside_a_one_shot_guard_is_not_per_frame(self):
+        source = """class S { bool done;
+          void FixedUpdate() { if (!done) { done = true; var r = body.GetComponent<Rage>(); } } }"""
+        self.assertEqual(core.hot_path_findings(source, "S.cs"), [])
+
+    def test_lookup_in_a_guard_that_never_latches_is_still_flagged(self):
+        source = """class S { bool done;
+          void FixedUpdate() { if (!done) { var r = body.GetComponent<Rage>(); } } }"""
+        self.assertEqual(len(core.hot_path_findings(source, "S.cs")), 1)
+
+    def test_unguarded_get_component_is_medium_confidence(self):
+        found = core.hot_path_findings("class S { void Update() { var r = GetComponent<Rage>(); } }", "S.cs")
+        self.assertEqual([f["confidence"] for f in found], ["medium"])

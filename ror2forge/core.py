@@ -735,6 +735,8 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
                 imports.add(name)
             elif name in R2API_TYPE_MODULES:
                 imports.add(R2API_TYPE_MODULES[name])
+            elif name in R2API_CORE_NAMESPACES:      # R2API.Utils.NetworkCompatibility: ships in R2API_Core
+                imports.add(name)
             else:
                 unresolved.add(name)
 
@@ -771,21 +773,29 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
 
     # 4. every audio event a source file plays must exist in the shipped event map, or it is silently silent
     # (a transform voice line pointed at a League event that was never extracted, and nothing errored)
-    events_files = [p for p in (root / "content").rglob("events.txt")] if (root / "content").is_dir() else []
-    stray_maps = [p for p in root.rglob("events.txt")
-                  if p not in events_files and not {"bin", "obj", "build"} & {x.lower() for x in p.parts}]
+    maps = [p for p in root.rglob("events.txt") if not {"bin", "obj", "build"} & {x.lower() for x in p.parts}]
+    has_content = (root / "content").is_dir()
+    # No content/ folder: a map under assets/, package/ or plugins/ is what a custom packager copies into the zip
+    # (docs/, notes and scratch folders are not), so only those count as shipped.
+    shipped_dirs = {"assets", "package", "plugins"}
+    events_files = ([p for p in maps if (root / "content") in p.parents] if has_content
+                    else [p for p in maps if shipped_dirs & {x.lower() for x in p.relative_to(root).parts[:-1]}])
+    stray_maps = [p for p in maps if p not in events_files]
     if stray_maps and not events_files:
         errors.append(f"{stray_maps[0].name} sits outside content/ and would not ship; move it under content/ "
                       "or delete it (docs/AUDIO.md)")
     if events_files:
         keys = set()
         for path in events_files:
+            # Assets resolve from content/ in the Forge layout, otherwise next to the map (assets/audio/ in a
+            # project whose packager copies assets/ into plugins/).
+            asset_root = root / "content" if has_content else path.parent
             for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
                 if "=" in line and not line.lstrip().startswith("#"):
                     key, _files = line.split("=", 1)
                     keys.add(key.strip())
                     for asset in (part.strip() for part in _files.split(",")):
-                        if asset and not list((root / "content").rglob(asset)):
+                        if asset and not list(asset_root.rglob(asset)):
                             errors.append(f'event map lists "{asset}" for {key.strip()} but no such file is packaged')
         for ev in sorted(set(re.findall(r'"(Play_[A-Za-z0-9_]+)"', joined_strings)) - keys):
             errors.append(f'"{ev}" is played in C# but missing from {events_files[0].name}')
@@ -805,8 +815,11 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
     # 6-9. survivor polish that compiles, validates and plays, so nothing else catches it (Ultron 1.1.2/1.2.0 audit)
     # Evaluated per file: a correct pattern in one file must not excuse a wrong one in another.
     findings = []
+    # The gain wrapper that reads the SFX slider is rarely the file that calls waveOut, and it reads the convar
+    # by name (a string literal), so search the literal-keeping view across the whole project.
+    reads_volume = bool(_VOLUME_READ.search(joined_strings))
     for path, text in texts.items():
-        for warning in survivor_warnings(text):
+        for warning in survivor_warnings(text, reads_volume):
             if warning not in warnings:
                 warnings.append(warning)
         for finding in hot_path_findings(text, path.name):
@@ -1034,6 +1047,18 @@ def _method_bodies(text: str):
             index += 1
 
 
+def _in_once_guard(body: str, pos: int) -> bool:
+    """True when `pos` sits inside `if (!flag) { ... flag = true; ... }`: that block runs once, not every frame."""
+    for guard in re.finditer(r"\bif\s*\(\s*!\s*(\w+)\s*(?:&&[^)]*)?\)\s*\{", body):
+        depth, i = 1, guard.end()
+        while i < len(body) and depth:
+            depth += (body[i] == "{") - (body[i] == "}")
+            i += 1
+        if guard.end() <= pos < i and re.search(rf"\b{guard.group(1)}\s*=\s*true\b", body[guard.end():i]):
+            return True
+    return False
+
+
 def hot_path_findings(text: str, name: str = "") -> list[dict]:
     """Advisory findings for work done every frame. Warnings, never errors: a real Update loop is often correct."""
     findings, seen = [], set()
@@ -1041,13 +1066,15 @@ def hot_path_findings(text: str, name: str = "") -> list[dict]:
         body = text[start:end]
         for pattern, problem, fix in _HOT_LOOKUPS:
             for hit in pattern.finditer(body):
+                if _in_once_guard(body, hit.start()):
+                    continue
                 line = text.count(chr(10), 0, start + hit.start()) + 1
                 key = (method, line, problem)
                 if key in seen:
                     continue
                 seen.add(key)
                 findings.append({"file": name, "line": line, "method": method, "severity": "warning",
-                                 "confidence": "high" if "GetComponent" not in problem else "medium",
+                                 "confidence": "high" if "GetComponent" not in hit.group(0) else "medium",
                                  "message": f"{problem} - {hit.group(0).strip()} in {method}()",
                                  "fix": fix, "doc": "docs/TASKS.md"})
         linq = _HOT_LINQ.search(body)
@@ -1059,8 +1086,15 @@ def hot_path_findings(text: str, name: str = "") -> list[dict]:
     return findings
 
 
-def survivor_warnings(source: str) -> list[str]:
-    """Warnings for survivor gaps that play fine in a solo test; each one names the fix in docs/RUNTIME.md."""
+_VOLUME_READ = re.compile(r"cvVolumeSfx|volume_sfx")
+
+
+def survivor_warnings(source: str, project_reads_volume: bool = False) -> list[str]:
+    """Warnings for survivor gaps that play fine in a solo test; each one names the fix in docs/RUNTIME.md.
+
+    project_reads_volume: another file of the same project reads the SFX slider (waveOut player and gain wrapper
+    usually live in separate files).
+    """
     warnings = []
     if re.search(r"\bAddSurvivorDef\b|ScriptableObject\.CreateInstance<SurvivorDef>", source) and "itemDisplayRuleSet" not in source:
         warnings.append("registers a survivor but never sets CharacterModel.itemDisplayRuleSet, so picked-up items are "
@@ -1073,7 +1107,7 @@ def survivor_warnings(source: str) -> list[str]:
             warnings.append("attack damageType without a DamageSource (" + "; ".join(untagged[:4]) + "): skill-keyed items "
                             "ignore these hits. Use new DamageTypeCombo(type, DamageTypeExtended.Generic, DamageSource.Primary|...) "
                             "(docs/RUNTIME.md, 'Damage source')")
-    if "waveOutWrite" in source and not re.search(r"cvVolumeSfx|volume_sfx", source):
+    if "waveOutWrite" in source and not project_reads_volume and not _VOLUME_READ.search(source):
         warnings.append("plays through waveOut but never reads the game's SFX volume; the in-game slider does nothing "
                         "(docs/AUDIO.md, Route B)")
     # Compress() needs readable pixels; Apply(false, true) then frees the CPU copy, so that pair is the correct
