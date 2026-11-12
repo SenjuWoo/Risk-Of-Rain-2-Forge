@@ -95,3 +95,49 @@ Extracting WEM media is still worth doing in every case: it is the input for rou
 - [ ] BKHD version read before planning any audio work
 - [ ] Textures checked against the Built-In render pipeline
 - [ ] Nothing proprietary shipped: no game DLLs, no ripped assets you lack the rights to redistribute
+
+
+## Unity (IL2CPP) games: bake the right prefab, and decrypt what is encrypted
+
+Measured on a survivor port from a Unity 2022.3 IL2CPP game (Manaka, Nov 2026). The first three builds shipped the wrong
+character and looked "nothing like the game" until the prefab was checked.
+
+### Check you are baking the player, not a lookalike
+
+- List every `SkinnedMeshRenderer` under the **player prefab** with mesh, vertex count, blend-shape count and material, and
+  compare against a screenshot of the real character before baking anything. A game can hold dozens of near-identical
+  NPC women (`NpcFemale_*`) whose meshes have no morphs and no player wardrobe. Their data is plausible and wrong.
+- Her real body had 42 morphs, the face 280, the coat 15 (open/close, bust). An NPC mesh with `m_Shapes: 0` is the sign
+  you are on the wrong prefab. Dressing state (coat open, mask, boots) is usually renderer toggles plus morphs on the
+  player prefab, not separate meshes.
+
+### Encrypted AssetBundles
+
+- A streaming bundle that does not start with `UnityFS` and whose bytes look random is encrypted. The decryptor is in the
+  game (here an `IKA9nt.Encrypter` `SeekableAesStream`). Do not hunt the key in the binary; ask the game.
+- Route that worked: a throwaway BepInEx IL2CPP plugin in the **source game** that waits about 12 s after the title screen,
+  reads `EncrypterCore.loadedBundle[label].cryptSystem` (a `SeekableAesStream`) and copies it to disk through `Read`. Harmony
+  patching the stream constructor failed ("Failed to init IL2CPP patch backend"); reading the cached stream did not.
+- Remove the plugin afterwards and say so: the source game folder must end exactly as found. The decrypted bundle is a
+  game asset: keep it out of the package and out of git.
+- Interop stubs come from the game's own `BepInEx/interop`; `forge inspect` on that DLL lists the loader's classes.
+
+### Reading the bundle
+
+- UnityPy needs a type-tree generator for IL2CPP bundles without type trees: `TypeTreeGenerator(version)` plus
+  `load_local_game(game_dir)`, installed as `env.typetree_generator`. Meshes, materials, textures, Avatars and the
+  transform tree read fine. **Humanoid clips do not**: they are stored streamed/dense.
+- AssetRipper (headless: `--headless --port N`, then `POST /Settings/Update`, `/LoadFile`, `/Export/UnityProject`) writes
+  clips as plain YAML float curves, which is what a runtime muscle driver needs. Export once, bake from the YAML.
+- Clip channel names are not `HumanTrait` muscle names for fingers: `LeftHand.Index.1 Stretched` is
+  `Left Index 1 Stretched`. Drop the IK goal channels (`LeftFootT/Q`, `RightHandT/Q`...); they are not muscles and made
+  the "unmatched channel" count look like a bug.
+- Blend-shape curves (`classID 137`, `blendShape.<name>` on a path) carry the face. Bake them with the muscles.
+- Take the **Avatar's own T-pose** (`m_Human.m_SkeletonPose`, human scale) for the runtime Avatar and keep the prefab's
+  bind pose for the skin. The two differ; using the bind pose tilts every muscle frame.
+- The prefab root can scale the whole character (1.2 here). Without it she is a head too short.
+
+### Every bake needs a guard
+
+A baker that falls back silently when its input is missing produces a "working" pack with 127 of 176 clips and zero face
+shapes. Fail loudly if the clip export or bundle is absent, and print counts (parts, clips, shapes referenced).

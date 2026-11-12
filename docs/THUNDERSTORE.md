@@ -54,3 +54,20 @@ HookGenPatcher is already required by the R2API modules. Listing it yourself is 
 Before you call a version "unpublished", ask the live API (`https://thunderstore.io/api/experimental/package/<Team>/<Name>/` → `latest.version_number`). A state file written by an earlier session once said 1.3.0 was unpublished when it was live; a rebuilt "1.3.0" would have been rejected or, worse, shipped as a different 1.3.0 locally. Any change after an upload is a new version.
 
 `forge audit` remains the check that every `using R2API.<Module>` and every `com.bepis.r2api.*` dependency attribute has a matching manifest line. A missing line is how a plugin never loads for anyone except the author. It also fails version drift between `manifest.json`, the `.csproj` `<Version>` and any C# `const string ...Version`, and audio event names that are missing from a shipped `events.txt`.
+
+
+## Packaging a baked-asset survivor (1.3.0 lessons)
+
+- Layout is `plugins/<Name>/<Name>.dll` plus `plugins/<Name>/assets/...`. A top-level `BepInEx/` folder fails
+  `forge validate`: the manager empties unknown folders into the package root. Resolve assets from `Info.Location`, never
+  from a hard-coded path.
+- `icon.png` must be exactly 256x256. Make it from the character's portrait, not a stretched 128 px glyph.
+- Pin each dependency to the version you ran the game with (`forge lookup`), not an older number copied from a template;
+  an untested pin is a different mod.
+- Ship only what is drawn: skip textures that only hidden submeshes use, retired icons and every probe or log. Stage from
+  the manifest's own part and material lists so a stale file in the bake folder cannot leak into a release.
+- A packaging script refuses to overwrite an existing version zip; a fix means a new version.
+- Mark the upload NSFW when the character or outfits are adult. State that the assets belong to the source creators and
+  the mod is unofficial; check the platform's rules on extracted assets before publishing.
+- Verify the shipped bytes: extract the zip into a clean profile, launch, and read `assets: N outfits, N parts, N clips`
+  and the registered-survivor line from the log.

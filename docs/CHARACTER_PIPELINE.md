@@ -159,6 +159,12 @@ Each of these was measured on the baseline above, not inferred.
 | A projectile ultimate flies past the target and deals nothing | It only detonates at the end of its travel | Add a per-step contact test, keep the end-of-travel burst as fallback. `docs/RUNTIME.md` |
 | A cape hangs rigid, or vanishes when seen from below | No cloth asset on a baked rig; the cloth panel is one layer of triangles | Swing the cloth bones in `LateUpdate` and append a reversed-winding copy of the cloth submesh. `docs/RUNTIME.md` |
 | An ultimate lands far shorter than the primary | Its impact point had its own range cap | Share the primary's range constant with the ultimate. `docs/RUNTIME.md` |
+| Character reads as a different, plainer person than the source game | Baked the NPC lookalike prefab, not the player prefab | List the player prefab's renderers, morphs and materials and compare to a screenshot first. `docs/EXTRACTION.md`, Unity section |
+| Bust (or any body morph) pokes out of the clothes | Morph pushed past 100 on the body while the clothing's matching shape stayed at 0, or the clothing shape is authored shallower | Drive body and clothing shapes as a pair, find the ratio by screenshots at several weights, clamp the config range to the measured limit. Costumes that share the body shape name follow 1:1 |
+| Skin or costume shows an overlay decal (womb crest, censor bars) | A submesh that is a runtime overlay is drawn | Record hidden submesh indices in the manifest and skip them (and skip their textures when packaging) |
+| Effect spawns and nothing draws | `Shader.Find("Sprites/Default")` and other built-ins are stripped (`No GUID record is available for shader name`) | Load an RoR2 shader through Addressables (`RoR2/Base/Shaders/HGCloudRemap.shader`, `DISABLEREMAP`), instantiate an inactive template and `SetActive(true)` the copy. `docs/RUNTIME.md` |
+| Item displays do nothing although the rule set is shared | The adapter builder was written but never called, or its bone names matched duplicate-named accessory rigs | Call it once after the rig is built; map Commando anchors through the manifest's humanoid names, not raw transform names |
+| Config value from an older build breaks the new look | The setting changed meaning (a 260 extrapolation became a 0-85 range) | New key name for a new meaning; clamp in code regardless of what the file holds |
 
 ## Verification loop
 

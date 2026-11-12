@@ -28,6 +28,11 @@ not a polish pass. Details are in the doc named in the last column; `forge audit
 | 10 | One stat field per bonus; no second velocity multiply; no vanilla CloakSpeed or ArmorBoost on top | Double speed, double armor | RUNTIME, Skills and buffs |
 | 11 | Costumes: data from the game's own material files, no clamp on the skin index, per-skeleton animation state cleared when the mesh changes, rig rebuilt on swap outside `onSkinApplied` | T-pose, wrong colors, only some costumes work | CHARACTER_PIPELINE |
 | 12 | Skill text numbers come from the constants the skills use; README follows | Tooltips that lie after a rebalance | CHARACTER_PIPELINE |
+| 13 | The character baked from the **player** prefab, checked against a screenshot (renderers, morphs, materials); the bake script fails loudly on missing input | A plainer NPC lookalike; a "working" pack missing most clips | EXTRACTION, Unity section |
+| 14 | Body and clothing morphs driven as a pair, range clamped to the measured no-clip limit; hidden overlay submeshes skipped | Skin through the coat, decals drawn | CHARACTER_PIPELINE |
+| 15 | Effects use Addressables shaders and an inactive template; each skill's effect seen in a screenshot at the frame it fires | Invisible effects | RUNTIME |
+| 16 | Soft-body jiggle per bone (spring on position) tuned from logged displacement | Stiff bust, hair and hips | RUNTIME, Soft-body jiggle |
+| 17 | Harness: spawn enemies and compare total HP per skill; four-view portrait camera; wait for the local user | Damage and look guessed from logs | RUNTIME |
 
 ## Done means
 
