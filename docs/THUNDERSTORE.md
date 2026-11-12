@@ -20,7 +20,7 @@ The root must contain `icon.png` (exactly 256×256 PNG), `README.md` and `manife
 
 Runtime files go under `plugins/`, `patchers/`, `config/`, `core` or `monomod` (optionally under `BepInEx/`). Any other top-level folder is emptied into the package root on install. `forge validate` rejects that layout.
 
-The README inside the zip is the package page for that version. Relative images in the zip are not the gallery. Gallery frames are a separate upload on the package page. The README of a survivor should say how to install, that every player including the host needs the mod, how to select the survivor, and the skill numbers the code actually deals. Put the version in the manifest and the changelog, not in the README body.
+The README inside the zip is the package page for that version. Relative images in the zip do not render on the package page, and the Thunderstore wiki documents no separate gallery upload: pictures in a README must be absolute https URLs to an image host you control (for example raw files in a public GitHub repository). Keep the short description under 250 characters. The README of a survivor should say how to install, that every player including the host needs the mod, how to select the survivor, and the skill numbers the code actually deals. Put the version in the manifest and the changelog, not in the README body.
 
 ## The upload form
 
