@@ -161,3 +161,43 @@ The blast also used `FalloffModel.SweetSpot`, so only the middle of the radius t
 ## Automated game runs are bounded
 
 A dev step that throws mid-capture can leave the character on a hidden render layer and stall the script until the run timeout. Every harness step that changes render layers, visibility or camera state restores them in a `finally`, and its own coroutine gets a wait, not the run's remaining time. Cap the run at one or two tries and a few minutes. The first time this was learned it cost about 50 minutes of a stuck dev game (Kisame, Nov 2026).
+
+
+## Soft-body jiggle (bust, hips) without a physics asset
+
+Rotating bone chains with a shared pendulum read as stiff. What works (Manaka 1.3.0, tuned by logged displacement and
+screenshots at different phases of a jog): one underdamped spring per bone on **position**.
+
+- Each frame set the bone back to its rest local position, read where the animation puts it (`bone.position`), pull a
+  virtual point toward it with `acc = k * (target - p) - c * v` (sub-step at 8 ms, clamp `dt` to 50 ms), then place the bone
+  at `target + clamp(offset * gain, max)`. Any motion leaves it lagging and overshooting: steps, landings, clip poses.
+- Starting values: `k` 300, `c` 5.5 (zeta about 0.16, several visible bounces), gain 2.3, max 6 cm; child bone `k` 220,
+  gain 1.2, max 3.5 cm. Shape the response in the rig's axes so vertical dominates (x 0.8, y 1.4, z 1.0).
+- Process parent before child: the child's target already contains the parent's displacement, which is the second wobble.
+- Skill states should kick it (`velocity += dir * strength * 0.2`); a full-strength impulse saturates the clamp.
+- Verify with a logged displacement per bone over time (idle is millimetres, a pose is tens) and stills at different
+  phases. A single screenshot cannot show bounce.
+
+## A survivor with its own camera needs a verification camera of its own
+
+`CameraRigController` owns `Camera.main` every frame, so moving it or pushing a params override from a harness fails. A
+dev portrait camera is a second `Camera` (`CopyFrom(main)`, higher depth) placed around the model, ray-checked against
+world geometry so terrain cannot sit between lens and subject, destroyed in a `finally`. Frame by joint (head, chest,
+hand), not by guessed offsets. Four views (front, side, back, close-up) are the minimum for a model change.
+
+## Harness operations that paid for themselves
+
+`spawn <addressable SpawnCard> N dist` (DirectorCore with `PlacementMode.Direct`, monster team), `hp` (total monster health),
+`give Item:N`, `equip`, `shape NAME W` (force a morph every frame), `bust N`, `jlog N dt`, `walk secs`. Damage is judged by
+total monster HP before and after each skill, not by a screenshot. The harness must wait for a local `NetworkUser` (up to
+90 s) before scripting: the user profile loads late and a fixed 3 s wait fails intermittently with "no local user".
+
+## Locomotion thresholds
+
+RoR2 survivors mostly move at 7 m/s. Choose the jog clip above about 4 m/s and walk below; scale playback by speed over the
+clip's stride speed. Thresholds near sprint speed leave the character walking at normal run speed.
+
+## Counting enemies: bodies, not colliders
+
+An overlap query returns every hurtbox. Count distinct `CharacterBody` instances or a multi-hurtbox boss counts several
+times. `forge audit` also flags `GetComponent` inside `FixedUpdate`; move the scan into its own method.
