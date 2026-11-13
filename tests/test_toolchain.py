@@ -21,6 +21,9 @@ class ToolchainTests(unittest.TestCase):
         env = dotnet_env(root)
         self.assertEqual(env["DOTNET_CLI_HOME"], str(root.resolve() / "tools/cache/dotnet-home"))
         self.assertEqual(env["DOTNET_GENERATE_ASPNET_CERTIFICATE"], "false")
+        # A private DOTNET_CLI_HOME without this switch makes the CLI write that
+        # folder into the user's PATH on first run.
+        self.assertEqual(env["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"], "false")
         self.assertEqual(env["PIP_CACHE_DIR"], str(root.resolve() / "tools/cache/pip"))
         self.assertTrue(Path(tool_paths(root)["python"]).is_relative_to(root.resolve()))
 
