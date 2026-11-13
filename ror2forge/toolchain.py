@@ -58,6 +58,10 @@ def dotnet_env(root: Path = ROOT) -> dict[str, str]:
         "TMP": str(cache / "tmp"),
         "TEMP": str(cache / "tmp"),
         "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1",
+        # The .NET CLI's first run appends "<DOTNET_CLI_HOME>\\.dotnet\\tools" to the
+        # user's PATH. With a private home per forge folder that left one dead PATH
+        # entry behind for every copy, worktree or extracted release that ever ran.
+        "DOTNET_ADD_GLOBAL_TOOLS_TO_PATH": "false",
         "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
         "DOTNET_NOLOGO": "1",
         "DOTNET_GENERATE_ASPNET_CERTIFICATE": "false",

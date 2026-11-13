@@ -1,3 +1,13 @@
+# 1.15.7 — No more leftover PATH entries (2026-11-12)
+
+- Forge no longer leaves entries on the user's `PATH`. It gives the .NET CLI a private home under `tools/cache`, and the
+  CLI's first run added `<that home>\.dotnet\tools` to the user `PATH`: one dead entry for every copy, worktree or
+  extracted release of the kit that ever ran. The toolchain environment now sets `DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false`.
+  Forge never used that folder; its tools are restored into `tools/` and called by full path.
+- Entries left by earlier versions are not removed for you. They end in `tools\cache\dotnet-home\.dotnet\tools` and
+  can be deleted from the user `Path` variable.
+- `forge.cmd` pins delayed expansion off, so a kit folder whose name contains `!` is passed through intact.
+
 # 1.15.6 — Audio route B brought up to date (2026-11-12, docs only)
 
 - `docs/AUDIO.md`: all four survivors built with the kit use the WinMM route, not two; the two mixer designs compared (one stream with a
