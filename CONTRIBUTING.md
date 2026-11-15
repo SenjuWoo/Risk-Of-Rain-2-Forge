@@ -4,7 +4,7 @@ This is a Windows-first WIP. Small, focused bug fixes and tested modding workflo
 
 1. Fork/clone, install Python 3.11+ and .NET 10 SDK, then run `forge.cmd setup`.
 2. Run `.venv\Scripts\python.exe -m unittest discover -s tests -v`.
-3. In a clean checkout, run `.venv\Scripts\python.exe scripts/ci_smoke.py` for real builds/packages. It creates CIPlugin/CIStats under projects/ and refuses to overwrite existing projects; use a clean checkout to repeat it.
+3. In a clean checkout, run `.venv\Scripts\python.exe scripts/ci_smoke.py` for real builds/packages. It creates CIPlugin/CIStats/CIProcedural under projects/ and refuses to overwrite existing projects; use a clean checkout to repeat it.
 4. Include a regression check for nontrivial behavior, update relevant help/docs, and describe exact validation in the PR.
 
 Keep CLI JSON stable, stderr useful, dependencies pinned and MCP explicitly opt-in. Do not register global services or change personal agent/model settings. One writer owns each generated mod project. Installed game/profile/save folders are read-only references.

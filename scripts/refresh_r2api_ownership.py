@@ -16,6 +16,11 @@ DEFAULT_CURATED = {
     # Module-root classes that are not named *API.cs. Checked against upstream by hand; kept in the committed file.
     "ContentAddition": "ContentManagement",
 }
+DEFAULT_PACKAGE_NAMES = {
+    # Module -> Thunderstore package suffix where the two differ. The tree cannot show this: the directory, the
+    # assembly and the GUID say "Rules", the published package is RiskofThunder-R2API_Rulebook.
+    "Rules": "Rulebook",
+}
 
 
 def fetch(url):
@@ -56,6 +61,7 @@ def main():
 
     target = pathlib.Path(__file__).resolve().parents[1] / "ror2forge/r2api_ownership.json"
     curated = dict(DEFAULT_CURATED)
+    package_names, package_sources = dict(DEFAULT_PACKAGE_NAMES), {}
     sources = {}
     if target.is_file():
         try:
@@ -69,7 +75,13 @@ def main():
             elif isinstance(value, str):
                 curated[name] = value
         sources.update(previous.get("curated_sources") or {})
+        # Package names are verified by hand against Thunderstore; a refresh must carry them, never drop them.
+        package_names.update(previous.get("package_names") or {})
+        package_sources.update(previous.get("package_sources") or {})
     types, modules = derive(tree, curated)
+    gone = sorted(set(package_names) - set(modules))
+    if gone:
+        raise SystemExit(f"package_names lists modules upstream no longer has: {', '.join(gone)}; review them")
 
     target.write_text(json.dumps({
         "source": "https://github.com/risk-of-thunder/R2API",
@@ -82,6 +94,8 @@ def main():
         "types": dict(sorted(types.items())),
         "curated": dict(sorted(curated.items())),
         "curated_sources": dict(sorted(sources.items())),
+        "package_names": dict(sorted(package_names.items())),
+        "package_sources": dict(sorted(package_sources.items())),
     }, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {target.name}: {len(types)} types, {len(modules)} modules at {head[:12]}")
 

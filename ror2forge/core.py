@@ -153,7 +153,7 @@ def discover() -> dict:
         globals_file = game / "Risk of Rain 2_Data/globalgamemanagers"
         unity = re.search(rb"20[0-9]{2}\.[0-9]+\.[0-9]+[abfp][0-9]+", globals_file.read_bytes()[:1048576]) if globals_file.is_file() else None
         manifest = game.parent.parent / "appmanifest_632360.acf"
-        build = re.search(r'"buildid"\s+"([0-9]+)"', manifest.read_text(encoding="utf-8")) if manifest.is_file() else None
+        build = re.search(r'"buildid"\s+"([0-9]+)"', manifest.read_text(encoding="utf-8", errors="replace")) if manifest.is_file() else None
         result.update({"steam_build": build.group(1) if build else None, "unity": unity.group().decode() if unity else None,
                        "assembly": str(managed), "assembly_sha256": sha256(managed), "runtime": "Unity Mono"})
     return result
@@ -219,7 +219,7 @@ def new_mod(name: str, author: str, template: str = "plugin", description: str =
     safe_name(name)
     safe_name(author)
     if template not in {"plugin", "stats", "procedural"}:
-        raise ValueError("Unknown template; use plugin or stats.")
+        raise ValueError("Unknown template; use plugin, stats or procedural.")
     if not description or len(description) > 250:
         raise ValueError("Description must contain 1–250 characters.")
     destination = project(name)
@@ -571,23 +571,71 @@ R2API_CORE_NAMESPACES = {"Utils": "Core", "MiscHelpers": "Core", "AutoVersionGen
 _OWNERSHIP = json.loads((Path(__file__).with_name("r2api_ownership.json")).read_text(encoding="utf-8"))
 R2API_MODULES = set(_OWNERSHIP["modules"])
 R2API_TYPE_MODULES: dict[str, str] = dict(_OWNERSHIP["types"])
+# A module's Thunderstore package is RiskofThunder-R2API_<module>, except where upstream published it under another
+# name. The directory, the assembly (R2API.Rules.dll) and the GUID (com.bepis.r2api.rules) all say "Rules"; the
+# package is R2API_Rulebook. Recorded in the ownership file with its evidence, never inferred from the module name.
+R2API_PACKAGE_NAMES: dict[str, str] = dict(_OWNERSHIP.get("package_names", {}))
+# The pre-5.0 monolith. Its assembly is plain "R2API" (R2API.dll) and it ships in its own package, not in R2API_Core.
+LEGACY_R2API_PACKAGE = "tristanmcpherson-R2API"
 
 
 def _norm(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", name.lower())
 
 
+_MODULE_BY_NORM = {_norm(module): module for module in R2API_MODULES}
+
+
+def _r2api_package(name: str) -> str:
+    """Package suffix (RiskofThunder-R2API_<suffix>) that ships a module, a core namespace or a GUID tail."""
+    owner = R2API_CORE_NAMESPACES.get(name, name)
+    owner = _MODULE_BY_NORM.get(_norm(owner), owner)        # GUID tails are lower case: rules -> Rules
+    return R2API_PACKAGE_NAMES.get(owner, owner)
+
+
 def _source_files(root: Path) -> list[Path]:
-    skip = {"bin", "obj", ".git", "node_modules", "dist", "build"}
-    return [f for f in root.rglob("*.cs") if not skip & {part.lower() for part in f.parts}]
+    # references/ holds other people's projects kept for reading (a tutorial mod, decompiled samples); their
+    # Play_ events and versions are not this mod's. Found on a shipped survivor that kept HenryTutorial there.
+    skip = {"bin", "obj", ".git", "node_modules", "dist", "build", "references", "reference"}
+    return [f for f in root.rglob("*.cs") if not skip & {part.lower() for part in f.relative_to(root).parts}]
 
 
 def _manifest_for(root: Path) -> tuple[Path | None, dict]:
-    candidates = [p for p in root.rglob("manifest.json") if "bin" not in {x.lower() for x in p.parts} and "obj" not in {x.lower() for x in p.parts}]
+    # Installed packages in a dev profile (BepInEx/plugins/*) are real Thunderstore manifests of other mods.
+    skip = {"bin", "obj", "bepinex", "node_modules", ".git"}
+    candidates = sorted((p for p in root.rglob("manifest.json")
+                         if not skip & {x.lower() for x in p.relative_to(root).parts[:-1]}),
+                        key=lambda p: (len(p.parts), str(p)))
     if not candidates:
         return None, {}
-    path = sorted(candidates, key=lambda p: len(p.parts))[0]
-    return path, json.loads(path.read_text(encoding="utf-8-sig"))
+
+    def is_package(path: Path) -> bool:
+        try:
+            value = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            return False
+        return isinstance(value, dict) and "version_number" in value and "name" in value
+
+    # The shallowest file that is a package manifest wins; a hash index or a Unity Packages/manifest.json named
+    # manifest.json is not the mod. With none that qualifies, the shallowest is reported as the broken one.
+    path = next((p for p in candidates if is_package(p)), candidates[0])
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8-sig"))
+    except ValueError as error:
+        raise ValueError(f"{path.name} is not valid JSON: {error}") from error
+    if not isinstance(manifest, dict):
+        raise ValueError(f"{path.name} must be a JSON object")
+    return path, manifest
+
+
+def _packaged_asset(root: Path, asset: str) -> bool | None:
+    """Whether an event map's file exists under the packaged asset root; None when it cannot be a packaged path."""
+    parts = PurePosixPath(asset.replace("\\", "/")).parts
+    if not parts or asset.startswith(("/", "\\")) or ":" in asset or ".." in parts:
+        return None
+    # The entry is a name or a relative path, never a pattern: "[" in a file name must match itself.
+    escaped = re.sub(r"([*?\[])", r"[\1]", "/".join(parts))
+    return any(root.rglob(escaped))
 
 
 def _csharp_literal_end(text: str, i: int) -> int:
@@ -626,7 +674,9 @@ def _csharp_literal_end(text: str, i: int) -> int:
         end = text.find(closing, j + quotes)
         return n if end < 0 else end + quotes
     j += 1
-    if verbatim and not dollars:
+    if verbatim:
+        # $@"..." and @$"..." follow verbatim rules too: a backslash is literal and "" is the only escape.
+        # Scanning them as ordinary strings read `$@"{dir}\"` past its end and blanked the code after it.
         while j < n:
             if text[j] == '"':
                 if j + 1 < n and text[j + 1] == '"':
@@ -696,8 +746,14 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
     if not manifest:
         raise ValueError("no manifest.json found")
 
+    errors, warnings = [], []
+    dependencies = manifest.get("dependencies", [])
+    if not isinstance(dependencies, list) or any(not isinstance(dep, str) for dep in dependencies):
+        # A foreign project can hand the audit anything; a broken list is a finding, not a traceback.
+        errors.append(f"{manifest_path.name} dependencies must be a list of Team-Package-Version strings")
+        dependencies = [dep for dep in dependencies if isinstance(dep, str)] if isinstance(dependencies, list) else []
     declared = set()
-    for dep in manifest.get("dependencies", []):
+    for dep in dependencies:
         parts = dep.split("-")
         if len(parts) < 3:
             continue
@@ -705,7 +761,7 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
         if package.lower().startswith("r2api_"):
             package = package[len("r2api_"):]      # RiskofThunder-R2API_Skins vs GUID com.bepis.r2api.skins
         declared.add(_norm(package))
-    declared_full = set(manifest.get("dependencies", []))
+    declared_full = set(dependencies)
 
     guids, imports, unresolved = set(), set(), set()
     texts = {}
@@ -740,7 +796,6 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
             else:
                 unresolved.add(name)
 
-    errors, warnings = [], []
     _unresolved = sorted(unresolved)
     if _unresolved:
         # Unknown names are not assumed to be packages: report them and let a human decide.
@@ -749,16 +804,16 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
 
     # 1. every R2API namespace used needs its own split module in the manifest
     for module in sorted(imports):
-        owner = R2API_CORE_NAMESPACES.get(module, module)
-        if _norm(owner) not in declared:
-            errors.append(f"using R2API.{module}; but no RiskofThunder-R2API_{module} dependency in {manifest_path.name}")
+        package = _r2api_package(module)
+        if _norm(package) not in declared:
+            errors.append(f"using R2API.{module}; but no RiskofThunder-R2API_{package} dependency in {manifest_path.name}")
 
     # 2. every BepInDependency GUID should correspond to a declared package
     for guid in sorted(guids):
         if guid.startswith(R2API_GUID_PREFIX):
-            module = guid[len(R2API_GUID_PREFIX):]
-            if _norm(module) not in declared:
-                errors.append(f"[BepInDependency(\"{guid}\")] but no matching R2API_{module} dependency in {manifest_path.name}")
+            package = _r2api_package(guid[len(R2API_GUID_PREFIX):])
+            if _norm(package) not in declared:
+                errors.append(f"[BepInDependency(\"{guid}\")] but no matching R2API_{package} dependency in {manifest_path.name}")
         # Non-R2API GUIDs (BepInEx, other mods) have no reliable GUID->package mapping; guessing produced
         # false positives, so they are left alone. The R2API split is the failure this check exists for.
 
@@ -795,7 +850,13 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
                     key, _files = line.split("=", 1)
                     keys.add(key.strip())
                     for asset in (part.strip() for part in _files.split(",")):
-                        if asset and not list(asset_root.rglob(asset)):
+                        if not asset:
+                            continue
+                        found = _packaged_asset(asset_root, asset)
+                        if found is None:
+                            errors.append(f'event map lists "{asset}" for {key.strip()}: use a file name or a '
+                                          "relative path inside the package")
+                        elif not found:
                             errors.append(f'event map lists "{asset}" for {key.strip()} but no such file is packaged')
         for ev in sorted(set(re.findall(r'"(Play_[A-Za-z0-9_]+)"', joined_strings)) - keys):
             errors.append(f'"{ev}" is played in C# but missing from {events_files[0].name}')
@@ -805,11 +866,23 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
     # build/ holds version backups and intermediate output; a stale copy there is not the project.
     for csproj in [p for p in root.rglob("*.csproj")
                    if not {"bin", "obj", "build"} & {x.lower() for x in p.parts}]:
-        found = ET.parse(csproj).findtext(".//Version")
+        try:
+            found = ET.parse(csproj).findtext(".//Version")
+        except ET.ParseError as error:
+            errors.append(f"{csproj.name} is not valid XML: {error}")
+            continue
         if found and version and found != version:
             errors.append(f"{csproj.name} <Version> {found} != manifest version_number {version}")
-    for literal in set(re.findall(r'\bconst\s+string\s+\w*Version\s*=\s*"(\d+\.\d+\.\d+)"', joined_strings)):
-        if version and literal != version:
+    declared_versions = _plugin_versions(joined_strings)
+    for literal in sorted(declared_versions - {version}):
+        if not version:
+            break
+        if version in declared_versions:
+            # Several plugins live in this tree (a dev-only dumper under tools/, say) and one matches: the others
+            # may never ship, so they are named, not blocking.
+            warnings.append(f'another plugin in this tree declares version "{literal}" (manifest {version}); '
+                            "align it if it ships in this package")
+        else:
             errors.append(f'C# version constant "{literal}" != manifest version_number {version}')
 
     # 6-9. survivor polish that compiles, validates and plays, so nothing else catches it (Ultron 1.1.2/1.2.0 audit)
@@ -852,11 +925,19 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
         if assembly.get("status") == "ok":
             for ref in assembly["references"]:
                 name = ref["name"]
-                if not name.startswith("R2API"):
+                if name == "R2API":
+                    # The legacy monolith is its own assembly in its own package; R2API_Core does not contain it.
+                    if _norm(LEGACY_R2API_PACKAGE.split("-", 1)[1]) not in declared:
+                        errors.append(f"compiled assembly references the legacy R2API.dll but no "
+                                      f"{LEGACY_R2API_PACKAGE} dependency is declared in {manifest_path.name}; "
+                                      "reference the split modules instead, or declare the legacy package")
                     continue
-                module = name.split(".", 1)[1] if "." in name else "Core"
-                if _norm(R2API_CORE_NAMESPACES.get(name, module)) not in declared:
-                    errors.append(f"compiled assembly references {name} but no RiskofThunder-R2API_{module} "
+                if not name.startswith("R2API."):
+                    continue                    # another team's assembly that merely starts with the same letters
+                # R2API.Skills.Interop and R2API.Animations.Runtime ship inside their module's package.
+                package = _r2api_package(name.split(".")[1])
+                if _norm(package) not in declared:
+                    errors.append(f"compiled assembly references {name} but no RiskofThunder-R2API_{package} "
                                   f"dependency is declared in {manifest_path.name}")
 
     return {"root": str(root), "manifest": str(manifest_path), "sources": len(sources),
@@ -866,6 +947,61 @@ def audit_project(root: str | Path, findings_limit: int = 12) -> dict:
             "findings": findings[:findings_limit], "findings_total": len(findings),
             "findings_truncated": len(findings) > findings_limit, "errors": errors, "warnings": warnings,
             "valid": not errors}
+
+
+_PLUGIN_ATTRIBUTE = re.compile(r"\[\s*(?:BepInEx\s*\.\s*)?BepInPlugin\s*\(")
+_VERSION_LITERAL = re.compile(r'"(\d+\.\d+\.\d+)"\Z')
+
+
+def _call_arguments(text: str, start: int) -> list[str]:
+    """Top-level arguments of the call whose opening parenthesis ends at `start`; literals are skipped intact."""
+    arguments, depth, begin, i = [], 1, start, start
+    while i < len(text) and depth:
+        ch = text[i]
+        if ch in "\"'$@":
+            end = _csharp_literal_end(text, i)
+            i = end if end > i else i + 1
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 1:
+            arguments.append(text[begin:i].strip())
+            begin = i + 1
+        i += 1
+    if depth:
+        return []                       # unbalanced: not something to guess at
+    arguments.append(text[begin:i - 1].strip())
+    return arguments
+
+
+def _plugin_versions(source: str) -> set[str]:
+    """Version strings the plugin itself declares, read from comment-stripped source with literals kept.
+
+    The third `[BepInPlugin(guid, name, version)]` argument is the plugin's version: a literal is compared directly,
+    a constant is followed to its `const string NAME = "x.y.z"` declaration, whatever it is called. Only when no
+    attribute is present does the conventional `...Version` name decide, so an unrelated `ConfigVersion` or
+    `MinGameVersion` beside a real plugin attribute is never mistaken for the mod's version.
+    """
+    found, attributes = set(), 0
+    for match in _PLUGIN_ATTRIBUTE.finditer(source):
+        arguments = _call_arguments(source, match.end())
+        if len(arguments) < 3:
+            continue
+        attributes += 1
+        literal = _VERSION_LITERAL.match(arguments[2])
+        if literal:
+            found.add(literal.group(1))
+            continue
+        name = re.fullmatch(r"(?:[A-Za-z_]\w*\s*\.\s*)*([A-Za-z_]\w*)", arguments[2])
+        if name:
+            # `const string Guid = "..", Ver = "x.y.z";` declares several names in one statement.
+            found.update(re.findall(
+                rf'\bconst\s+string\s+(?:[^;]*?,\s*)?{name.group(1)}\s*=\s*"(\d+\.\d+\.\d+)"', source))
+    if not attributes:
+        found.update(re.findall(r'\bconst\s+string\s+\w*Version\s*=\s*"(\d+\.\d+\.\d+)"', source))
+    return found
 
 
 class ToolchainMissing(RuntimeError):
@@ -1140,8 +1276,11 @@ def package_mod(name: str, skip_audit: bool = False) -> dict:
     safe_name(metadata["author"])
     if not VERSION.fullmatch(metadata["version"]):
         raise ValueError("Invalid mod version in forge.json.")
-    receipt = read_json(folder / "build/receipt.json")
+    receipt_path = folder / "build/receipt.json"
     dll = owned(folder / "build/bin" / f"{name}.dll")
+    if not receipt_path.is_file() or not dll.is_file():
+        raise ValueError(f"No successful build to package; run `forge build {name}` first.")
+    receipt = read_json(receipt_path)
     manifest = read_json(folder / "manifest.json")
     errors = check_manifest(manifest)
     if errors:
@@ -1249,7 +1388,9 @@ def _repo_slug() -> str | None:
 
 # Only these decide whether a commit is safe to release. The release workflows themselves are excluded:
 # a job cannot be required to observe its own successful conclusion.
-REQUIRED_CHECKS = ("Windows tests and mod builds", "CodeQL")
+# These are the check runs GitHub reports and the protected branch requires. Code scanning's runs are named
+# "Analyze (<language>)"; none is named "CodeQL", so that prefix matched no run and the scans were never read.
+REQUIRED_CHECKS = ("Windows tests and mod builds", "Analyze (actions)", "Analyze (csharp)", "Analyze (python)")
 
 
 def _ci_state(commit: str) -> tuple[str, list[str]]:
@@ -1258,8 +1399,8 @@ def _ci_state(commit: str) -> tuple[str, list[str]]:
     if not slug or not commit:
         return "unknown", []
     try:
-        result = subprocess.run(["gh", "api", f"repos/{slug}/commits/{commit}/check-runs"], capture_output=True,
-                                text=True, timeout=30)
+        result = subprocess.run(["gh", "api", f"repos/{slug}/commits/{commit}/check-runs?per_page=100"],
+                                capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError):
         return "unknown", []
     if result.returncode != 0:
@@ -1268,11 +1409,12 @@ def _ci_state(commit: str) -> tuple[str, list[str]]:
         runs = json.loads(result.stdout).get("check_runs", [])
     except ValueError:
         return "unknown", []
-    relevant = [run for run in runs if isinstance(run, dict)
-                and any((run.get("name") or "").startswith(required) for required in REQUIRED_CHECKS)]
+    relevant = [run for run in runs if isinstance(run, dict) and run.get("name") in REQUIRED_CHECKS]
     names = [f"{run.get('name')}:{run.get('conclusion')}" for run in relevant]
-    if not relevant:
-        return "unknown", names
+    missing = [required for required in REQUIRED_CHECKS if not any(run.get("name") == required for run in relevant)]
+    if missing:
+        # A required check that never reported is absent evidence, not a pass.
+        return "unknown", names + [f"{required}:missing" for required in missing]
     if any((run.get("status") or "") != "completed" for run in relevant):
         return "pending", names
     if any((run.get("conclusion") or "") != "success" for run in relevant):
@@ -1379,7 +1521,8 @@ def _check_source_archive(path: Path, expected_files: int | None) -> list[str]:
     return problems
 
 
-def release_check(mode: str = "prerelease", assets: str | Path | None = None) -> dict:
+def release_check(mode: str = "prerelease", assets: str | Path | None = None,
+                  require_verified: bool = False) -> dict:
     """Compare every place the project's own version is written; two modes, never a silent pass.
 
     prerelease: a pull request or untagged main commit - a tag is optional, and its absence is reported
@@ -1561,6 +1704,10 @@ def release_check(mode: str = "prerelease", assets: str | Path | None = None) ->
     if mode == "release" and ci_state == "failed":
         errors.append("independent CI check for this commit did not succeed")
     release_verified = (not errors and tag_status == "ok" and assets_verified and ci_state == "verified")
+    if require_verified and not release_verified and not errors:
+        # Without this a gate stays green on "nothing looked wrong", which is not the same as verified.
+        errors.append(f"release is not verified: tag {tag_status}, assets "
+                      f"{'verified' if assets_verified else 'not checked'}, independent CI {ci_state}")
     return {"mode": mode, "version": version, "package_version": package_version, "changelog": heading,
             "tag": tag_name, "tag_status": tag_status, "assets": asset_report,
             "checks": {"version": version_consistent, "tag": tag_verified,
@@ -1623,7 +1770,7 @@ def lookup(namespace: str, name: str, version: str | None = None) -> dict:
 
 
 def guide(topic: str = "overview") -> dict:
-    mapping = {"overview": "AGENT_GUIDE.md", "code": "RECIPES.md", "content": "RECIPES.md", "assets": "RECIPES.md", "networking": "RECIPES.md", "debugging": "RECIPES.md", "character": "CHARACTER_PIPELINE.md", "audio": "AUDIO.md", "extraction": "EXTRACTION.md", "runtime": "RUNTIME.md", "thunderstore": "THUNDERSTORE.md", "checklist": "SURVIVOR_CHECKLIST.md"}
+    mapping = {"overview": "AGENT_GUIDE.md", "code": "RECIPES.md", "content": "RECIPES.md", "assets": "RECIPES.md", "networking": "RECIPES.md", "debugging": "RECIPES.md", "character": "CHARACTER_PIPELINE.md", "audio": "AUDIO.md", "extraction": "EXTRACTION.md", "runtime": "RUNTIME.md", "thunderstore": "THUNDERSTORE.md", "checklist": "SURVIVOR_CHECKLIST.md", "tasks": "TASKS.md", "toolchain": "TOOLCHAIN.md"}
     if topic not in mapping:
         raise ValueError(f"Unknown guide topic: {topic}")
     path = ROOT / "docs" / mapping[topic]

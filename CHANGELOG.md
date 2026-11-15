@@ -1,3 +1,37 @@
+# 1.16.0 — Owner audit: true audit results and a release gate that reads every check (2026-11-15)
+
+Fixes found by auditing the whole project and running the audit on four shipped survivors.
+
+- `forge audit` no longer reports false blocking errors for R2API Rulebook. Its module, assembly (`R2API.Rules.dll`)
+  and GUID (`com.bepis.r2api.rules`) say `Rules`, but the package is `RiskofThunder-R2API_Rulebook`. The ownership file
+  now records package names that differ from the module (`package_names`), with the evidence, and the refresh script
+  keeps them.
+- Messages name packages that exist: `R2API.Utils` asks for `R2API_Core`, not `R2API_Utils`. `R2API.Skills.Interop`
+  and `R2API.Animations.Runtime` count as their module. The legacy `R2API.dll` asks for `tristanmcpherson-R2API`, not
+  `R2API_Core`. An unrelated assembly whose name only starts with `R2API` is ignored.
+- Version check follows `[BepInPlugin(guid, name, version)]`. It compares a literal, or the constant the attribute
+  names, whatever that constant is called (`PLUGIN_VERSION`, `Info.Ver`). Before, any `const string ...Version`
+  blocked packaging (`ConfigVersion = "2.0.0"`), and a drifted `PLUGIN_VERSION` or literal went unseen. If a second,
+  dev-only plugin in the tree declares another version while one plugin matches, that is a warning.
+- The audit picks the shallowest `manifest.json` that is a package manifest. Installed packages under
+  `BepInEx/plugins` never count. On a shipped survivor, `tools/hashes/manifest.json` had produced 13 false errors.
+- `references/` folders (third-party projects kept for reading) are no longer audited as the mod's source.
+- `$@"..."` and `@$"..."` follow verbatim string rules. A string ending in `\"` hid the code after it from every check.
+- Malformed input is a finding or a clear error, not a traceback: non-list or non-string dependencies, a manifest that
+  is not a JSON object or not JSON, a csproj that is not XML, an absolute or `..` path in `events.txt`.
+- `package` before `build` says to run `forge build NAME`, instead of a raw `FileNotFoundError`.
+- Release gate: the independent CI check matched check runs starting with `CodeQL`. GitHub names them
+  `Analyze (actions|csharp|python)`, so code scanning was never read. All four required runs must now be present and
+  successful. A missing run is `unknown`.
+- `release-check --require-verified` fails unless the tag, published bytes and CI evidence all verify. The
+  published-release workflow uses it and now has `checks: read`. v1.15.7's run passed while it reported
+  `release_verified: false`. The tag name reaches that workflow's script through the environment, not interpolation.
+- Tests that never ran now run: the directory-link isolation test skipped on every platform because `content/` already
+  existed, and the real assembly-reader test skipped in CI because nothing had built the reader yet.
+- `guide tasks` and `guide toolchain` added. README command table lists `plan`, `audit`, `release-check` and the
+  procedural template. RELEASE_PROCESS names the real pin locations and the four required checks. SECURITY,
+  WORKSPACE_OWNERSHIP, CONTRIBUTING, ROADMAP and the skill updated.
+
 # 1.15.7 — No more leftover PATH entries (2026-11-12)
 
 - Forge no longer leaves entries on the user's `PATH`. It gives the .NET CLI a private home under `tools/cache`, and the

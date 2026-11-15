@@ -80,6 +80,9 @@ class IsolationTests(unittest.TestCase):
         (other / "private" / "secret.txt").write_text("secret", encoding="utf-8")
         victim = self._project()
         link = victim / "content"
+        # The scaffold already created content/. Linking over an existing directory fails on every platform,
+        # which made this test skip everywhere, CI included, and left the directory-link refusal unproven.
+        shutil.rmtree(link)
         if not make_link(other / "private", link):
             self.skipTest("this platform cannot create directory links")
         self._receipt(victim)

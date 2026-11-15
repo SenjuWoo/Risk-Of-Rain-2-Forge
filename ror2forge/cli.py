@@ -51,6 +51,8 @@ def parser() -> argparse.ArgumentParser:
     release.add_argument("--mode", choices=["prerelease", "release"], default="prerelease",
                          help="prerelease: tag optional (PR/main). release: tag required and assets verified")
     release.add_argument("--assets", help="Folder holding SHA256SUMS and BUILD-RECEIPT.json to verify")
+    release.add_argument("--require-verified", action="store_true",
+                         help="Fail unless the tag, the published bytes and independent CI evidence all verify")
     audit = commands.add_parser("audit", help="Cross-check R2API usage and BepInDependency GUIDs against the manifest")
     audit.add_argument("project")
     audit.add_argument("--findings-limit", type=int, default=12,
@@ -95,7 +97,7 @@ def main(argv=None) -> int:
         elif args.command == "package":
             value = core.package_mod(args.name, skip_audit=args.skip_audit)
         elif args.command == "release-check":
-            value = core.release_check(args.mode, args.assets)
+            value = core.release_check(args.mode, args.assets, args.require_verified)
         elif args.command == "audit":
             value = core.audit_project(args.project, args.findings_limit)
         elif args.command == "validate":

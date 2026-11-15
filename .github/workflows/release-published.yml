@@ -5,11 +5,16 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  checks: read   # release-check reads this commit's check runs as independent CI evidence
 jobs:
   published:
     name: Download and verify published assets
     runs-on: windows-latest
     timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # Passed through the environment, never interpolated into the script: a tag name is outside input.
+      RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -19,9 +24,9 @@ jobs:
         with:
           python-version: "3.14"
       - name: Download the published files
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ github.event.release.tag_name || github.ref_name }}" --dir published
+        run: gh release download "$env:RELEASE_TAG" --dir published
       # The point of this job: verify the bytes users actually download, not a claim in the repository.
-      - name: Verify published bytes
-        run: python forge.py release-check --mode release --assets published
+      # --require-verified makes "CI evidence unknown" a failure; without it this job passed while
+      # reporting release_verified: false, because the lookup had no token.
+      - name: Verify published bytes and independent CI evidence
+        run: python forge.py release-check --mode release --assets published --require-verified
