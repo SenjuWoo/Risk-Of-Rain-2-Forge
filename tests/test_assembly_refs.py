@@ -169,8 +169,12 @@ class ReaderFreshnessTests(unittest.TestCase):
 @unittest.skipUnless(shutil.which("dotnet"), "no .NET SDK on this machine")
 class RealReaderTests(unittest.TestCase):
     def test_reads_references_without_loading_the_assembly(self):
-        if not core.ASMREFS_DLL.is_file():
-            self.skipTest("the assembly reader has not been built yet")
+        # Build it here rather than skipping: on a clean runner nothing else has built it by the time this runs,
+        # so the real reader was never exercised by this test in CI.
+        try:
+            core._ensure_reader()
+        except core.ToolchainMissing as error:
+            self.skipTest(f"the assembly reader cannot be built here: {error}")
         payload = core.assembly_refs(core.ASMREFS_DLL)
         self.assertEqual(payload["status"], "ok")
         self.assertIn("System.Reflection.Metadata", {r["name"] for r in payload["references"]})

@@ -81,5 +81,11 @@
   },
   "curated_sources": {
     "ContentAddition": "https://github.com/risk-of-thunder/R2API/blob/master/R2API.ContentManagement/ContentAddition.cs"
+  },
+  "package_names": {
+    "Rules": "Rulebook"
+  },
+  "package_sources": {
+    "Rules": "https://thunderstore.io/package/RiskofThunder/R2API_Rulebook/ ships R2API.Rules.dll (GUID com.bepis.r2api.rules); no R2API_Rules package exists. Checked 2026-11-15."
   }
 }

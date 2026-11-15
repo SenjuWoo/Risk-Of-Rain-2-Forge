@@ -30,7 +30,7 @@ jobs:
         run: .venv/Scripts/python.exe -m unittest discover -s tests -v
       - name: Release label consistency (prerelease mode)
         run: .venv/Scripts/python.exe forge.py release-check --mode prerelease
-      - name: Build and package both templates
+      - name: Build and package all three templates
         run: .venv/Scripts/python.exe scripts/ci_smoke.py
       - name: Check Windows launcher
         run: |

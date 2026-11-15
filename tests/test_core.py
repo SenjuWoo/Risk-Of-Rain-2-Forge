@@ -251,7 +251,8 @@ class CoreTests(unittest.TestCase):
         mod = self._audit_mod([], '[BepInDependency("com.bepis.r2api.skins")]\nclass P {}')
         result = core.audit_project(mod)
         self.assertFalse(result["valid"])
-        self.assertIn("R2API_skins", result["errors"][0])
+        # The message names the package as Thunderstore spells it, so it can be pasted into the manifest.
+        self.assertIn("R2API_Skins", result["errors"][0])
 
     def test_audit_rejects_undeclared_namespace_import(self):
         mod = self._audit_mod([], 'using R2API.Skins;\nclass P {}')

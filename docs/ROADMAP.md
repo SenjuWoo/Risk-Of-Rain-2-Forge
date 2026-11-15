@@ -3,14 +3,14 @@
 ## Working foundation
 
 - JSON CLI, optional eight-tool MCP adapter and reusable agent skill.
-- Local pinned tool provisioning, offline caches, two C# templates and NuGet locks.
+- Local pinned tool provisioning, offline caches, three C# templates (plugin, stats, procedural) and NuGet locks.
 - Exact assembly inspection, read-only discovery/log triage and deterministic guarded packaging.
 - Tests plus clean-runner template compilation/package CI.
 - Bounded symbol search through ILSpy and backed-up version bumps for the edit/build/package loop (1.1.0 WIP).
 - On-demand dependency freshness reports, MCP cache recovery and game-free build diagnostics (1.2.0 WIP).
 - Verified survivor/character route without a Unity editor: source extraction → mesh/rig/clip conversion → baked runtime packs → body, skins and packaging, with engine facts and failure modes (`docs/CHARACTER_PIPELINE.md`, 1.3.0).
 
-- Survivor checklist (1.11.0): `docs/SURVIVOR_CHECKLIST.md` collects the twelve defaults and the definition of done, and `forge audit` warns on the ones it can see (1.10.0).
+- Survivor checklist (1.11.0): `docs/SURVIVOR_CHECKLIST.md` collects the survivor defaults (seventeen as of 1.15.5) and the definition of done, and `forge audit` warns on the ones it can see (1.10.0).
 
 ## Before a stable release
 

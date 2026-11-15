@@ -38,7 +38,7 @@ cd Risk-Of-Rain-2-Forge
 .\forge.cmd package MyMod
 ```
 
-Use `--template stats` for a configurable movement speed example using R2API's stat event. Its default multiplier is 1.0. Source lives in `projects/MyMod/src/`; package metadata lives beside it. `artifacts/` receives the checked ZIP. Generated mods and caches are private and excluded from source tracking.
+Use `--template stats` for a configurable movement speed example using R2API's stat event (default multiplier 1.0), or `--template procedural` for runtime-generated geometry with no Unity editor. Source lives in `projects/MyMod/src/`; package metadata lives beside it. `artifacts/` receives the checked ZIP. Generated mods and caches are private and excluded from source tracking.
 
 The repository ships the tool installer, templates, agent skill and source. Setup installs pinned ILSpy, Thunderstore CLI and the official MCP SDK locally, retaining caches for offline restoration. Third-party binaries, game files and private caches are not in Git. It reuses your Python and .NET SDK. After an online setup, `forge.cmd setup --offline` restores from retained caches on the same Python/OS/architecture. See [toolchain and provenance](docs/TOOLCHAIN.md) for pins and limits.
 
@@ -48,19 +48,22 @@ A Steam copy of Risk of Rain 2 is needed for installed-assembly inspection and g
 
 | Command | Purpose |
 |---|---|
+| `plan "REQUEST"` | Classify a mod request; return only the documents, frameworks, checks and pitfalls it needs |
 | `doctor` | Read-only Steam/game/Unity/profile/tool discovery, including game assembly hash |
 | `updates` | Query official package feeds on demand; report current pins, scoped candidates and lookup failures |
 | `setup [--offline]` | Restore pinned tools into this workspace |
-| `new NAME --author TEAM [--template plugin\|stats]` | Create an owned mod without replacing source |
+| `new NAME --author TEAM [--template plugin\|stats\|procedural]` | Create an owned mod without replacing source |
 | `build NAME [--locked] [--offline]` | Restore and compile, with source/DLL evidence and a build log |
 | `symbols QUERY [--assembly DLL] [--limit 20]` | Find exact type names through ILSpy; bounded, case-insensitive output |
 | `inspect TYPE [--assembly DLL] [--member ID]` | Decompile one exact type or member using ILSpy |
 | `bump NAME patch\|minor\|major\|X.Y.Z` | Back up and update mod version fields together, then rebuild |
-| `package NAME` | Validate build freshness and create a deterministic Thunderstore ZIP |
-| `validate ZIP` | Check paths, metadata, icon integrity, CRC and forbidden game references |
+| `audit DIR [--findings-limit 12]` | Cross-check R2API usage, dependency GUIDs, the compiled assembly's references and version fields against the manifest; warn on survivor gaps and per-frame work |
+| `package NAME [--skip-audit]` | Validate build freshness, run the audit and create a deterministic Thunderstore ZIP |
+| `validate ZIP` | Check paths, install layout, metadata, icon integrity, CRC and forbidden game references |
+| `release-check [--mode prerelease\|release] [--assets DIR] [--require-verified]` | Compare VERSION, package version, changelog and tag; with `--assets`, verify published bytes and independent CI |
 | `logs [--path LOG] [--lines 250]` | Read a bounded log tail and identify triage candidates |
 | `lookup NAMESPACE NAME [--version VERSION]` | Read live Thunderstore package metadata and dependencies |
-| `guide [overview\|character\|runtime\|audio\|extraction\|thunderstore\|...]` | Read one playbook. `runtime` is companion aim, buffs and camera. `thunderstore` is the page and dependency minimums |
+| `guide [overview\|character\|runtime\|audio\|extraction\|thunderstore\|checklist\|tasks\|toolchain\|...]` | Read one playbook. `runtime` is companion aim, buffs and camera. `thunderstore` is the page and dependency minimums |
 
 ```powershell
 .\forge.cmd symbols CharacterBody --limit 10
@@ -114,7 +117,7 @@ This is a server entry example, not a provider-specific full config. Nothing her
 
 ## Validation and boundaries
 
-Run `.venv\Scripts\python.exe -m unittest discover -s tests -v` after setup. MCP tests use a real local SDK client/server connection. CI also restores/builds both templates, repeats locked offline builds and checks deterministic ZIPs on a clean Windows runner without a game install. [VALIDATION.md](VALIDATION.md) distinguishes development-machine evidence from public CI. Generated examples and evidence files are local outputs, not files shipped in a clone.
+Run `.venv\Scripts\python.exe -m unittest discover -s tests -v` after setup. MCP tests use a real local SDK client/server connection. CI also restores/builds all three templates, repeats locked offline builds and checks deterministic ZIPs on a clean Windows runner without a game install. [VALIDATION.md](VALIDATION.md) distinguishes development-machine evidence from public CI. Generated examples and evidence files are local outputs, not files shipped in a clone.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [the roadmap](docs/ROADMAP.md), [the changelog](CHANGELOG.md) and [security reporting](SECURITY.md). This WIP source publication has no stable binary release.
 
