@@ -9,6 +9,16 @@ from ror2forge import updates
 from ror2forge.cli import main as cli_main
 
 
+def thunderstore_current(url):
+    """Fixture: each Thunderstore pin is served and is also the latest release."""
+    rest = url[len(updates.THUNDERSTORE):].strip("/").split("/")
+    pins = {d.rsplit("-", 1)[0]: d.rsplit("-", 1)[1]
+            for d in (*updates.core.SCAFFOLD_DEPENDENCIES, *updates.core.STATS_DEPENDENCIES)}
+    if len(rest) == 3:
+        return {"version_number": rest[2]}
+    return {"latest": {"version_number": pins["-".join(rest)]}, "is_deprecated": False}
+
+
 class UpdateTests(TestCase):
     def test_cli_unknown_results_have_nonzero_exit_and_json_report(self):
         output = io.StringIO()
@@ -54,10 +64,13 @@ class UpdateTests(TestCase):
         def metadata(url):
             if "tcli" in url:
                 raise TimeoutError("feed timed out")
+            if url.startswith(updates.THUNDERSTORE):
+                return thunderstore_current(url)
             if url == updates.PYPI:
                 return {"info": {"version": updates.toolchain.MCP_VERSION}, "releases": {updates.toolchain.MCP_VERSION: [{"yanked": False}]}}
             package = url.split("/")[-2]
-            pins = {name.lower(): version for name, version in {**updates.toolchain.DOTNET_TOOLS, **updates.core.PINS}.items()}
+            pins = {name.lower(): version for name, version in
+                    {**updates.toolchain.DOTNET_TOOLS, **updates.core.PINS, **updates.core.STATS_REFERENCES}.items()}
             return {"versions": [pins[package]]}
         with patch.object(updates, "_bepinex_base", return_value="https://nuget.bepinex.dev/v3/package/"), patch.object(updates, "_json", side_effect=metadata):
             result = updates.check_updates()
@@ -69,10 +82,13 @@ class UpdateTests(TestCase):
 
     def test_service_index_failure_marks_only_reference_packages_unknown(self):
         def metadata(url):
+            if url.startswith(updates.THUNDERSTORE):
+                return thunderstore_current(url)
             if url == updates.PYPI:
                 return {"info": {"version": updates.toolchain.MCP_VERSION}, "releases": {updates.toolchain.MCP_VERSION: [{"yanked": False}]}}
             package = url.split("/")[-2]
-            return {"versions": [updates.toolchain.DOTNET_TOOLS[package]]}
+            return {"versions": [{**updates.toolchain.DOTNET_TOOLS,
+                                  **{k.lower(): v for k, v in updates.core.STATS_REFERENCES.items()}}[package]]}
         with patch.object(updates, "_bepinex_base", side_effect=ValueError("no service endpoint")), patch.object(updates, "_json", side_effect=metadata):
             result = updates.check_updates()
         self.assertFalse(result["complete"])

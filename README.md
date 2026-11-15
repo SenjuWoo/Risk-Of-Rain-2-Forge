@@ -87,7 +87,7 @@ To iterate on a generated mod:
 
 Normal output is JSON; errors use a nonzero exit. Invalid ZIPs return their JSON report on stdout with exit 1. `--debug` before the command adds a traceback on stderr. Build logs and receipts live in each mod's `build/` folder.
 
-Run `forge.cmd updates` when refreshing the workbench or investigating a game/tool update. It checks metadata without installing anything or changing pins. Reference candidates stay scoped to the template's loader/Unity line; a newer game reference still needs compatibility verification. Failed lookups are reported as unknown and produce exit 1, rather than pretending everything is current. This command has no background schedule and adds no MCP tool.
+Run `forge.cmd updates` when refreshing the workbench or investigating a game/tool update. It checks metadata without installing anything or changing pins, and covers the tool pins plus the NuGet and Thunderstore pins `forge new` writes into every mod. Reference candidates stay scoped to the template's loader/Unity line; a newer game reference still needs compatibility verification. Failed lookups are reported as unknown and produce exit 1, rather than pretending everything is current. This command has no background schedule and adds no MCP tool.
 
 `doctor` reports build readiness independently of game discovery: the templates can compile with a compatible SDK and NuGet references on a machine without RoR2. It reports the SDK selected from the forge root, its resolution error if any, and the separate installed-SDK inventory. A project's own global.json may select another SDK; its build remains authoritative. Default game inspection still needs the installed assembly. Setup's complete toolchain requires .NET 10 for ILSpy.
 

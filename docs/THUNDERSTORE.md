@@ -49,7 +49,7 @@ A manifest that lists `bbepis-BepInExPack-5.4.2109` plus Core 5.3.0 still instal
 
 HookGenPatcher is already required by the R2API modules. Listing it yourself is optional.
 
-`RoR2BepInExPack` is the scaffold's chosen extra pack: `forge new` still depends on `RiskofThunder-RoR2BepInExPack-1.49.0` and `bbepis-BepInExPack-5.4.2122`. Leave those template pins alone. A plugin that does not reference `RoR2BepInExPack.dll` can omit it. The played survivor's DLL did not reference that assembly, it was not in the manifest, and the plugin loaded. Do not add the pack only because a dev profile happens to contain it, and do not delete it from the template without a new measurement.
+`RoR2BepInExPack` is the scaffold's chosen extra pack: `forge new` still depends on `RiskofThunder-RoR2BepInExPack-1.49.0` and `bbepis-BepInExPack-5.4.2122`. Leave those template pins alone. `forge updates` lists them with the latest release, so a newer one is visible without being adopted. A plugin that does not reference `RoR2BepInExPack.dll` can omit it. The played survivor's DLL did not reference that assembly, it was not in the manifest, and the plugin loaded. Do not add the pack only because a dev profile happens to contain it, and do not delete it from the template without a new measurement.
 
 Before you call a version "unpublished", ask the live API (`https://thunderstore.io/api/experimental/package/<Team>/<Name>/` → `latest.version_number`). A state file written by an earlier session once said 1.3.0 was unpublished when it was live; a rebuilt "1.3.0" would have been rejected or, worse, shipped as a different 1.3.0 locally. Any change after an upload is a new version.
 
