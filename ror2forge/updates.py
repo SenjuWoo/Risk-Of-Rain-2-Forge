@@ -15,6 +15,7 @@ from . import __version__, core, toolchain
 NUGET = "https://api.nuget.org/v3-flatcontainer/"
 BEPINEX_INDEX = "https://nuget.bepinex.dev/v3/index.json"
 PYPI = "https://pypi.org/pypi/mcp/json"
+THUNDERSTORE = "https://thunderstore.io/api/experimental/package/"
 MAX_RESPONSE = 2 * 1024 * 1024
 
 
@@ -82,9 +83,35 @@ def _select(package, pinned, versions):
     return {"latest": latest, "status": "current" if latest_key == pin else "update_available", "policy": policy}
 
 
+def _thunderstore(pinned, source):
+    """Latest version of one Thunderstore package; the pinned version must still be served."""
+    metadata = _json(source)
+    latest = (metadata.get("latest") or {}).get("version_number") if isinstance(metadata.get("latest"), dict) else None
+    if not isinstance(latest, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", latest):
+        raise ValueError("Thunderstore metadata has no numeric latest version.")
+    # A pin the site no longer serves would break every new mod's install; that is not "current".
+    if _json(f"{source}{pinned}/").get("version_number") != pinned:
+        raise ValueError("Thunderstore does not serve the pinned version.")
+    if _version_key(latest) < _version_key(pinned):
+        raise ValueError("Thunderstore's latest version is older than the pin; review it manually.")
+    deprecated = metadata.get("is_deprecated") is True
+    policy = ("Thunderstore dependency minimum: managers already install this version or newer. Raise the template "
+              "pin only after building and running against the newer release.")
+    if deprecated:
+        policy += " The package is marked deprecated on Thunderstore; review its replacement."
+    return {"latest": latest, "status": "current" if latest == pinned else "update_available", "policy": policy,
+            "deprecated": deprecated}
+
+
 def _check(job):
     package, pinned, source, prior_error = job
     result = {"package": package, "pinned": pinned, "source": source}
+    if source.startswith(THUNDERSTORE):
+        result["kind"] = "thunderstore"
+        try:
+            return {**result, **_thunderstore(pinned, source)}
+        except Exception as error:
+            return {**result, "latest": None, "status": "unknown", "error": str(error)[:500]}
     try:
         if prior_error:
             raise ValueError(prior_error)
@@ -115,6 +142,12 @@ def check_updates() -> dict:
     except Exception as problem:
         base, error = None, str(problem)[:500]
     jobs.extend((package, version, f"{base}{package.lower()}/index.json" if base else BEPINEX_INDEX, error) for package, version in core.PINS.items())
+    # The stats template's R2API reference is published on nuget.org.
+    jobs.extend((package, version, f"{NUGET}{package.lower()}/index.json", None)
+                for package, version in core.STATS_REFERENCES.items())
+    for dependency in (*core.SCAFFOLD_DEPENDENCIES, *core.STATS_DEPENDENCIES):
+        team, name, version = dependency.split("-")
+        jobs.append((f"{team}-{name}", version, f"{THUNDERSTORE}{team}/{name}/", None))
     with ThreadPoolExecutor(max_workers=4) as executor:
         entries = list(executor.map(_check, jobs))
     return {"complete": all(entry["status"] != "unknown" for entry in entries),

@@ -98,6 +98,7 @@ audit blocks.
 Pins live in code, not in template folders: `PINS` and the scaffold's Thunderstore dependency list in
 `ror2forge/core.py` (`new_mod`), `DOTNET_TOOLS` in `ror2forge/toolchain.py`, `requirements-mcp.txt`, the package
 sources in `NuGet.Config`, and `REQUIRED_CHECKS` in `ror2forge/core.py`, which must name the same check runs as the
-protected branch. `forge updates` reports what it tracks; it does
+protected branch. The scaffold's Thunderstore pins are `SCAFFOLD_DEPENDENCIES`/`STATS_DEPENDENCIES` and its extra NuGet
+reference is `STATS_REFERENCES`, both in `ror2forge/core.py`. `forge updates` reports all of them; it does
 not edit pins, and latest is not the same as compatible. After any pin change: run the full suite, run
 `ci_smoke`, and only then re-package. Never accept an update because the number is higher.

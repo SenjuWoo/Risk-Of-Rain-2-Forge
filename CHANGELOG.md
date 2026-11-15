@@ -1,3 +1,15 @@
+# 1.16.1 — `forge updates` covers the template's own pins (2026-11-15)
+
+- `forge updates` now reports the pins `forge new` writes into every mod, not only the toolchain's. Added: the stats
+  template's `R2API.RecalculateStats` NuGet reference, and the Thunderstore dependencies `bbepis-BepInExPack`,
+  `RiskofThunder-RoR2BepInExPack`, `RiskofThunder-R2API_RecalculateStats` and `RiskofThunder-HookGenPatcher`.
+  RoR2BepInExPack 1.50.0 was live against the template's 1.49.0, and nothing said so.
+- For a Thunderstore pin the report confirms the pinned version is still served. A pin the site no longer serves, a
+  latest older than the pin, or malformed metadata is `unknown`, never `current`. A deprecated package is flagged.
+- Pins are unchanged. A Thunderstore dependency is a minimum, so `update_available` is information. The scaffold's
+  pins now live in `SCAFFOLD_DEPENDENCIES`, `STATS_DEPENDENCIES` and `STATS_REFERENCES` in `ror2forge/core.py`, the same
+  names the report reads, so a pin cannot drift out of it. `forge new` writes the same bytes as before.
+
 # 1.16.0 — Owner audit: true audit results and a release gate that reads every check (2026-11-15)
 
 Fixes found by auditing the whole project and running the audit on four shipped survivors.

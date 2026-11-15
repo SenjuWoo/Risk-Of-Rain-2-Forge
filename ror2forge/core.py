@@ -31,6 +31,11 @@ VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z
 DEPENDENCY = re.compile(r"[A-Za-z0-9_]+-[A-Za-z0-9_]+-[0-9]+\.[0-9]+\.[0-9]+\Z")
 PINS = {"BepInEx.Core": "5.4.21", "RiskOfRain2.GameLibs": "1.5.0-r.1",
         "UnityEngine.Modules": "2021.3.45"}
+# What `forge new` writes into every mod; `forge updates` reads the same names, so a pin cannot drift out of the
+# report. Thunderstore dependencies are minimums: managers already install that version or newer.
+SCAFFOLD_DEPENDENCIES = ("bbepis-BepInExPack-5.4.2122", "RiskofThunder-RoR2BepInExPack-1.49.0")
+STATS_REFERENCES = {"R2API.RecalculateStats": "1.7.0"}
+STATS_DEPENDENCIES = ("RiskofThunder-R2API_RecalculateStats-1.7.0", "RiskofThunder-HookGenPatcher-1.2.9")
 
 
 def sha256(path: Path) -> str:
@@ -233,10 +238,10 @@ def new_mod(name: str, author: str, template: str = "plugin", description: str =
         (staging / "content").mkdir()
         guid = f"{author.lower()}.{name.lower()}"
         refs = dict(PINS)
-        dependencies = ["bbepis-BepInExPack-5.4.2122", "RiskofThunder-RoR2BepInExPack-1.49.0"]
+        dependencies = list(SCAFFOLD_DEPENDENCIES)
         if template == "stats":
-            refs["R2API.RecalculateStats"] = "1.7.0"
-            dependencies.extend(["RiskofThunder-R2API_RecalculateStats-1.7.0", "RiskofThunder-HookGenPatcher-1.2.9"])
+            refs.update(STATS_REFERENCES)
+            dependencies.extend(STATS_DEPENDENCIES)
         references = "\n".join(f'    <PackageReference Include="{package}" Version="[{version}]" PrivateAssets="all" />' for package, version in refs.items())
         csproj = f'''<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
