@@ -1,3 +1,18 @@
+# Unreleased — README and presentation pass (2026-11-25, docs only)
+
+- README rebuilt around a cover image and three terminal shots captured from real runs (`doctor` + `plan`,
+  `symbols` + `lookup` + `updates`, and a `stats` mod through `new`, `build`, `package` and `validate`), with a
+  "What you get" list, a tour, the full command table and a flow diagram. Every existing instruction was kept.
+- Corrected: the README said the project "has no stable binary release"; releases since 1.3.0 are stable source kits
+  (source ZIP, `SHA256SUMS`, build receipt) and no binaries are published. It also now says plainly that there is no
+  survivor template; a survivor is built on a template by following the character pipeline.
+- `RELEASE_PROCESS.md`: merging now needs only the `Windows tests and mod builds` check; the CodeQL `Analyze (...)`
+  runs are not merge-blocking, but `release-check` still requires all four on a tagged commit. The step 4
+  `git archive` command now carries the `core.autocrlf=false` / `core.eol=lf` overrides that the same file says are
+  required (without them the archive fails `release-check`'s blob comparison).
+- New `docs/presentation/` images: `hero.png`, `social-preview.png` and the three screenshots. No code, template or
+  pin changed; VERSION stays 1.16.1 and no tag is cut.
+
 # 1.16.1 — `forge updates` covers the template's own pins (2026-11-15)
 
 - `forge updates` now reports the pins `forge new` writes into every mod, not only the toolchain's. Added: the stats
