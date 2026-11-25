@@ -23,8 +23,10 @@ only local check that exercises the real compiler; unit tests alone do not prove
 
 ## 3. Land it
 
-Main is protected: push a branch, open a PR, wait for all four checks (`Windows tests and mod builds`,
-`Analyze (actions)`, `Analyze (csharp)`, `Analyze (python)`), then squash-merge. Re-check CI on the merge commit SHA, not on the PR head.
+Main is protected: push a branch, open a PR, wait for the required `Windows tests and mod builds` check, then
+squash-merge. Re-check CI on the merge commit SHA, not on the PR head. CodeQL default setup also runs
+`Analyze (actions)`, `Analyze (csharp)` and `Analyze (python)` on that commit; they are not merge-blocking, but
+`release-check` requires all four runs to be successful before a tag on that commit is release-verified.
 
 ## 4. Tag and publish
 
@@ -36,7 +38,7 @@ git push origin vX.Y.Z
 Then build the source kit **twice** and confirm identical hashes:
 
 ```
-git archive --format=zip --prefix=Risk-of-Rain-2-Forge-X.Y.Z/ <sha> -o artifacts/release-X.Y.Z/Risk-of-Rain-2-Forge-X.Y.Z-source.zip
+git -c core.autocrlf=false -c core.eol=lf archive --format=zip --prefix=Risk-of-Rain-2-Forge-X.Y.Z/ <sha> -o artifacts/release-X.Y.Z/Risk-of-Rain-2-Forge-X.Y.Z-source.zip
 ```
 
 Write `BUILD-RECEIPT.json` (`commit` = full `git rev-parse <sha>`, artifact sha256/size, CI conclusions) and
